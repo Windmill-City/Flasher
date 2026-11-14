@@ -496,10 +496,12 @@ std::uint8_t App::enter_slave(std::uint32_t baud) noexcept
     m_isp.abort();
     stop_bridge();
 
-    m_host.power_off();
+    // Power the target with the data lines floating so its bootloader sees D+
+    // low and starts the application. The application's own pull-ups then make
+    // the role sample high, selecting slave mode. Initialising the UART before
+    // power-up would drive D+ high and trap the target in the ISP bootloader.
+    m_host.power_cycle_slave();
     m_uart.init(baud);
-    m_host.vbus(true);
-    systick::delay(80u * clock::kTicksPerMs);
 
     m_seen_coding_generation = m_usb.line_coding_generation();
     m_mode                   = kModeSlave;
