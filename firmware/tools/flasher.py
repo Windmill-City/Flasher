@@ -106,14 +106,27 @@ class Flasher:
         except Exception:
             pass
 
-    def break_to_command(self, wait: float = 0.25) -> None:
-        """Exit bridge mode. Safe to call in command mode."""
-        try:
-            self.ser.send_break(0.05)
-        except Exception:
-            pass
-        time.sleep(wait)
-        self.ser.reset_input_buffer()
+    def break_to_command(self, wait: float = 0.25, attempts: int = 4) -> None:
+        """Exit bridge mode and confirm the Flasher answers commands.
+
+        Windows can deliver the USB BREAK after a following bulk write, so a
+        single BREAK plus a fixed sleep is racy: the first command frame may be
+        forwarded to the bridged target and lost. Retry with a PING until the
+        Flasher replies.
+        """
+        for attempt in range(attempts):
+            try:
+                self.ser.send_break(0.05)
+            except Exception:
+                pass
+            time.sleep(wait if attempt == 0 else max(wait, 0.2))
+            self.ser.reset_input_buffer()
+            try:
+                self.request(CMD_PING, timeout=0.6)
+                return
+            except TimeoutError:
+                continue
+        raise TimeoutError("Flasher did not return to command mode")
 
     def request(self, command: int, payload: bytes = b"", timeout: float = 2.0,
                 accepted_status: tuple[int, ...] = (0,)) -> bytes:
@@ -152,7 +165,13 @@ class Flasher:
         return self.request(CMD_SET_MODE, payload, timeout=5.0)
 
     def isp_open(self) -> bytes:
-        return self.request(CMD_ISP_OPEN, timeout=10.0)
+        try:
+            return self.request(CMD_ISP_OPEN, timeout=10.0)
+        except TimeoutError:
+            # Safe to retry: the Flasher aborts the old session and power
+            # cycles the target into the bootloader again.
+            self.break_to_command()
+            return self.request(CMD_ISP_OPEN, timeout=15.0)
 
     def isp_close(self) -> bytes:
         return self.request(CMD_ISP_CLOSE, timeout=10.0)
