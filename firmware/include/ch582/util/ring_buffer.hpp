@@ -26,7 +26,7 @@ class RingBuffer
   public:
     static constexpr std::size_t capacity = N;
 
-    std::size_t size() const noexcept
+    std::size_t                  size() const noexcept
     {
         const std::size_t head = m_write;
         const std::size_t tail = m_read;

@@ -11,35 +11,35 @@ namespace ch582::usb
 namespace
 {
 
-constexpr std::uint8_t kCdcSetCommFeature        = 0x02;
-constexpr std::uint8_t kCdcGetCommFeature        = 0x03;
-constexpr std::uint8_t kCdcClearCommFeature      = 0x04;
-constexpr std::uint8_t kCdcSetLineCoding        = 0x20;
-constexpr std::uint8_t kCdcGetLineCoding        = 0x21;
-constexpr std::uint8_t kCdcSetControlLineState  = 0x22;
-constexpr std::uint8_t kCdcSendBreak            = 0x23;
+constexpr std::uint8_t kCdcSetCommFeature      = 0x02;
+constexpr std::uint8_t kCdcGetCommFeature      = 0x03;
+constexpr std::uint8_t kCdcClearCommFeature    = 0x04;
+constexpr std::uint8_t kCdcSetLineCoding       = 0x20;
+constexpr std::uint8_t kCdcGetLineCoding       = 0x21;
+constexpr std::uint8_t kCdcSetControlLineState = 0x22;
+constexpr std::uint8_t kCdcSendBreak           = 0x23;
 
-constexpr std::uint8_t kStall                   = 0xFF;
-constexpr std::uint8_t kTokenOut                = 0x00;
-constexpr std::uint8_t kTokenIn                 = 0x20;
-constexpr std::uint8_t kToggleOk                = 0x40;
+constexpr std::uint8_t kStall                  = 0xFF;
+constexpr std::uint8_t kTokenOut               = 0x00;
+constexpr std::uint8_t kTokenIn                = 0x20;
+constexpr std::uint8_t kToggleOk               = 0x40;
 
-constexpr std::uint8_t kRequestTypeIn           = 0x80;
-constexpr std::uint8_t kRequestTypeMask         = 0x60;
-constexpr std::uint8_t kRequestTypeStandard     = 0x00;
-constexpr std::uint8_t kRequestTypeClass        = 0x20;
-constexpr std::uint8_t kRecipientMask           = 0x1F;
-constexpr std::uint8_t kRecipientDevice         = 0x00;
-constexpr std::uint8_t kRecipientEndpoint       = 0x02;
+constexpr std::uint8_t kRequestTypeIn          = 0x80;
+constexpr std::uint8_t kRequestTypeMask        = 0x60;
+constexpr std::uint8_t kRequestTypeStandard    = 0x00;
+constexpr std::uint8_t kRequestTypeClass       = 0x20;
+constexpr std::uint8_t kRecipientMask          = 0x1F;
+constexpr std::uint8_t kRecipientDevice        = 0x00;
+constexpr std::uint8_t kRecipientEndpoint      = 0x02;
 
-constexpr std::uint8_t kReqGetStatus            = 0x00;
-constexpr std::uint8_t kReqClearFeature         = 0x01;
-constexpr std::uint8_t kReqSetAddress           = 0x05;
-constexpr std::uint8_t kReqGetDescriptor        = 0x06;
-constexpr std::uint8_t kReqGetConfiguration     = 0x08;
-constexpr std::uint8_t kReqSetConfiguration     = 0x09;
-constexpr std::uint8_t kReqGetInterface         = 0x0A;
-constexpr std::uint8_t kReqSetInterface         = 0x0B;
+constexpr std::uint8_t kReqGetStatus           = 0x00;
+constexpr std::uint8_t kReqClearFeature        = 0x01;
+constexpr std::uint8_t kReqSetAddress          = 0x05;
+constexpr std::uint8_t kReqGetDescriptor       = 0x06;
+constexpr std::uint8_t kReqGetConfiguration    = 0x08;
+constexpr std::uint8_t kReqSetConfiguration    = 0x09;
+constexpr std::uint8_t kReqGetInterface        = 0x0A;
+constexpr std::uint8_t kReqSetInterface        = 0x0B;
 
 } // namespace
 
@@ -74,9 +74,9 @@ void Device::endpoint_init()
     usbreg::dev_addr()  = 0;
     usbreg::ctrl()      = usbreg::kUcDevPuEn | usbreg::kUcIntBusy | usbreg::kUcDmaEn;
     sysreg::pin_analog_ie() |= sysreg::kPinUsbIe | sysreg::kPinUsbDpPu;
-    usbreg::dev_ctrl()  = usbreg::kUdPdDis;
-    usbreg::int_fg() = 0xFF;
-    usbreg::int_en() = usbreg::kUieSuspend | usbreg::kUieTransfer | usbreg::kUieBusReset;
+    usbreg::dev_ctrl() = usbreg::kUdPdDis;
+    usbreg::int_fg()   = 0xFF;
+    usbreg::int_en()   = usbreg::kUieSuspend | usbreg::kUieTransfer | usbreg::kUieBusReset;
 
     enable_irq(Irq::Usb);
 
@@ -247,7 +247,7 @@ void Device::handle_setup()
         }
         else if (m_setup_request == kCdcSetControlLineState)
         {
-            m_control_state = setup->value_l;
+            m_control_state     = setup->value_l;
 
             // SERIAL_STATE: DCD | DSR, on the CDC notification endpoint.
             m_ep1_buffer[0]     = 0xA1;
@@ -263,7 +263,7 @@ void Device::handle_setup()
             usbreg::ep1_t_len() = 10;
             usbreg::ep1_ctrl()  = (usbreg::ep1_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResAck;
 
-            length = 0;
+            length              = 0;
         }
         else if (m_setup_request == kCdcSendBreak)
         {
@@ -439,10 +439,10 @@ void Device::poll()
     {
         if (m_tx != nullptr)
         {
-            std::uint8_t      length = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize, m_tx->size()));
+            std::uint8_t length = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize, m_tx->size()));
             if (length != 0)
             {
-                length = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
+                length              = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
                 usbreg::ep2_t_len() = length;
                 usbreg::ep2_ctrl()  = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResAck;
             }

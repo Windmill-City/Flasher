@@ -25,17 +25,17 @@ class Isp
     {
     }
 
-    bool        begin(std::uint32_t image_size, Info& info) noexcept;
-    bool        program(std::uint32_t address, const std::uint8_t* data, std::uint8_t length) noexcept;
-    bool        verify(std::uint32_t address, const std::uint8_t* data, std::uint8_t length) noexcept;
-    bool        finish() noexcept;
+    bool begin(std::uint32_t image_size, Info& info) noexcept;
+    bool program(std::uint32_t address, const std::uint8_t* data, std::uint8_t length) noexcept;
+    bool verify(std::uint32_t address, const std::uint8_t* data, std::uint8_t length) noexcept;
+    bool finish() noexcept;
 
-    bool        active() const noexcept
+    bool active() const noexcept
     {
         return m_active;
     }
 
-    void        abort() noexcept
+    void abort() noexcept
     {
         m_active       = false;
         m_write_closed = false;
@@ -47,15 +47,15 @@ class Isp
     }
 
   private:
-    bool        transfer(const std::uint8_t* command,
-                         std::uint8_t        length,
-                         std::uint8_t*       response,
-                         std::uint8_t&       response_length,
-                         std::uint32_t       timeout_ms) noexcept;
-    bool        read_response(std::uint8_t* response, std::uint8_t& response_length, std::uint32_t timeout_ms) noexcept;
-    bool        send_key(std::uint8_t* response, std::uint8_t& response_length) noexcept;
-    bool        close_write_session(bool rekey) noexcept;
-    void        update_key() noexcept;
+    bool transfer(const std::uint8_t* command,
+                  std::uint8_t        length,
+                  std::uint8_t*       response,
+                  std::uint8_t&       response_length,
+                  std::uint32_t       timeout_ms) noexcept;
+    bool read_response(std::uint8_t* response, std::uint8_t& response_length, std::uint32_t timeout_ms) noexcept;
+    bool send_key(std::uint8_t* response, std::uint8_t& response_length) noexcept;
+    bool close_write_session(bool rekey) noexcept;
+    void update_key() noexcept;
 
     usbhost::Host& m_host;
     Info           m_info;

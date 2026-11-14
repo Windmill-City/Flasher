@@ -15,21 +15,21 @@ namespace ch582::usb
 class Device
 {
   public:
-    static Device& instance();
+    static Device&       instance();
 
-    void           init();
-    void           poll();
+    void                 init();
+    void                 poll();
     CH582_HIGH_CODE void irq_handler();
 
     // Bytes to send to the PC. The application owns this ring.
-    void           set_tx_buffer(RingBuffer<512>* tx) noexcept
+    void                 set_tx_buffer(RingBuffer<512>* tx) noexcept
     {
         m_tx = tx;
     }
 
-    std::size_t    read_host(void* dst, std::size_t max_length) noexcept;
+    std::size_t read_host(void* dst, std::size_t max_length) noexcept;
 
-    bool           enumerated() const noexcept
+    bool        enumerated() const noexcept
     {
         return (usbreg::dev_addr() & 0x7Fu) != 0;
     }
@@ -39,12 +39,12 @@ class Device
         return m_line_coding;
     }
 
-    std::uint32_t  line_coding_generation() const noexcept
+    std::uint32_t line_coding_generation() const noexcept
     {
         return m_line_coding_generation;
     }
 
-    bool           consume_break() noexcept
+    bool consume_break() noexcept
     {
         CriticalSection guard;
         const bool      pending = m_break_pending;
@@ -52,13 +52,13 @@ class Device
         return pending;
     }
 
-    std::uint8_t   control_state() const noexcept
+    std::uint8_t control_state() const noexcept
     {
         return m_control_state;
     }
 
   private:
-    Device() = default;
+    Device()                                     = default;
 
     static constexpr std::size_t  kEp0Size       = 64;
     static constexpr std::size_t  kPacketSize    = 64;
@@ -82,19 +82,20 @@ class Device
         std::uint8_t length_l;
         std::uint8_t length_h;
     };
+
     static_assert(sizeof(SetupRequest) == 8, "USB setup packet is eight bytes");
 
-    void           endpoint_init();
-    CH582_HIGH_CODE void handle_setup();
-    void           handle_ep0_in();
+    void                   endpoint_init();
+    CH582_HIGH_CODE void   handle_setup();
+    void                   handle_ep0_in();
 
-    DeviceInfo           m_device_info;
-    std::uint8_t         m_setup_request = 0;
-    std::uint8_t         m_setup_type    = 0;
-    std::uint8_t         m_setup_length  = 0;
-    const std::uint8_t*  m_descriptor    = nullptr;
+    DeviceInfo             m_device_info;
+    std::uint8_t           m_setup_request = 0;
+    std::uint8_t           m_setup_type    = 0;
+    std::uint8_t           m_setup_length  = 0;
+    const std::uint8_t*    m_descriptor    = nullptr;
 
-    serial::LineCoding   m_line_coding{115200u, serial::kStopBits1, serial::kParityNone, 8};
+    serial::LineCoding     m_line_coding{115200u, serial::kStopBits1, serial::kParityNone, 8};
     volatile std::uint32_t m_line_coding_generation = 0;
     volatile std::uint8_t  m_control_state          = 0;
     volatile bool          m_break_pending          = false;

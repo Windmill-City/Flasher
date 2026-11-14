@@ -40,7 +40,7 @@ int main()
     gpio::pb::dir() &= ~kBootPin;
     gpio::pb::pu() |= kBootPin;
 
-    auto& usb = usb::Device::instance();
+    auto&                usb = usb::Device::instance();
 
     static usbhost::Host host;
     static serial::Uart  uart;

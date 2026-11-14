@@ -60,7 +60,7 @@ struct DescriptorSet
 inline constexpr std::uint8_t kDescriptorDevice = 1;
 inline constexpr std::uint8_t kDescriptorConfig = 2;
 
-inline const std::uint8_t* find_descriptor(const DescriptorSet& set, std::uint8_t type) noexcept
+inline const std::uint8_t*    find_descriptor(const DescriptorSet& set, std::uint8_t type) noexcept
 {
     switch (type)
     {

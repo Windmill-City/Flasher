@@ -9,12 +9,12 @@ namespace ch582::app
 namespace
 {
 
-constexpr std::uint8_t kRequestMagic0 = 0xAA;
-constexpr std::uint8_t kRequestMagic1 = 0x55;
+constexpr std::uint8_t kRequestMagic0  = 0xAA;
+constexpr std::uint8_t kRequestMagic1  = 0x55;
 constexpr std::uint8_t kResponseMagic0 = 0x55;
 constexpr std::uint8_t kResponseMagic1 = 0xAA;
 
-std::uint8_t crc8(const std::uint8_t* data, std::size_t length) noexcept
+std::uint8_t           crc8(const std::uint8_t* data, std::size_t length) noexcept
 {
     std::uint8_t crc = 0;
     for (std::size_t i = 0; i < length; ++i)
@@ -173,7 +173,7 @@ void App::process_frame() noexcept
     case kCmdPing:
     case kCmdInfo:
     {
-        const auto& info = m_host.info();
+        const auto&  info = m_host.info();
         std::uint8_t response[9];
         response[0] = kStatusOk;
         response[1] = 1; // protocol major
@@ -211,7 +211,7 @@ void App::process_frame() noexcept
                 break;
             }
 
-            const auto& info = m_host.info();
+            const auto&  info = m_host.info();
             std::uint8_t response[7];
             response[0] = kStatusOk;
             response[1] = m_mode;
@@ -323,9 +323,8 @@ void App::process_frame() noexcept
 
         const std::uint32_t address = read_u32(payload);
         const std::uint8_t  length  = static_cast<std::uint8_t>(payload_length - 4);
-        const bool          ok      = command == kCmdIspWrite
-                                          ? m_isp.program(address, &payload[4], length)
-                                          : m_isp.verify(address, &payload[4], length);
+        const bool          ok      = command == kCmdIspWrite ? m_isp.program(address, &payload[4], length)
+                                                              : m_isp.verify(address, &payload[4], length);
 
         if (!ok)
         {
@@ -364,7 +363,7 @@ void App::process_frame() noexcept
             break;
         }
 
-        const auto& info = m_host.info();
+        const auto&  info = m_host.info();
         std::uint8_t response[5];
         response[0] = kStatusOk;
         response[1] = static_cast<std::uint8_t>(info.vid & 0xFFu);
@@ -400,7 +399,7 @@ void App::process_frame() noexcept
         const auto   received  = m_host.bulk_in(m_host.info().bulk_in, in_data, in_length, 5000000);
 
         std::uint8_t response[64];
-        response[0] = (received == usbhost::Result::ok) ? kStatusOk : kStatusUsb;
+        response[0]         = (received == usbhost::Result::ok) ? kStatusOk : kStatusUsb;
         std::uint8_t length = 0;
         if (received == usbhost::Result::ok)
         {
@@ -435,11 +434,11 @@ std::uint8_t App::enter_isp_host() noexcept
     m_host.power_cycle_isp();
 
     usbhost::DeviceInfo info;
-    const auto           result = m_host.enumerate(info, 1200);
+    const auto          result = m_host.enumerate(info, 1200);
     if (result != usbhost::Result::ok)
     {
         return (result == usbhost::Result::disconnected || result == usbhost::Result::timeout) ? kStatusNoTarget
-                                                                                                : kStatusUsb;
+                                                                                               : kStatusUsb;
     }
 
     if (!m_host.is_isp_device())
@@ -458,11 +457,11 @@ std::uint8_t App::enter_master() noexcept
     m_host.power_cycle_master();
 
     usbhost::DeviceInfo info;
-    const auto           result = m_host.enumerate(info, 1200);
+    const auto          result = m_host.enumerate(info, 1200);
     if (result != usbhost::Result::ok)
     {
         return (result == usbhost::Result::disconnected || result == usbhost::Result::timeout) ? kStatusNoTarget
-                                                                                                : kStatusUsb;
+                                                                                               : kStatusUsb;
     }
 
     if (m_host.is_isp_device())
@@ -610,7 +609,7 @@ void App::bridge_poll() noexcept
     }
     else if (m_mode == kModeSlave)
     {
-        std::uint8_t buffer[64];
+        std::uint8_t      buffer[64];
         const std::size_t length = m_usb.read_host(buffer, sizeof(buffer));
         if (length != 0)
         {

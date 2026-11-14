@@ -59,7 +59,6 @@ CH582_HIGH_CODE void init() noexcept
         sysreg::pll_config() |= 0x80;
     }
 
-
     systick::now()  = 0;
     systick::ctrl() = systick::kCtrlEnable;
 }

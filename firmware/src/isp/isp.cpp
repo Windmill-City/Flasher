@@ -9,15 +9,15 @@ namespace ch582::isp
 namespace
 {
 
-constexpr std::uint8_t kCmdIdentify    = 0xA1;
-constexpr std::uint8_t kCmdIspEnd      = 0xA2;
-constexpr std::uint8_t kCmdIspKey      = 0xA3;
-constexpr std::uint8_t kCmdErase       = 0xA4;
-constexpr std::uint8_t kCmdProgram     = 0xA5;
-constexpr std::uint8_t kCmdVerify      = 0xA6;
-constexpr std::uint8_t kCmdReadConfig  = 0xA7;
+constexpr std::uint8_t kCmdIdentify   = 0xA1;
+constexpr std::uint8_t kCmdIspEnd     = 0xA2;
+constexpr std::uint8_t kCmdIspKey     = 0xA3;
+constexpr std::uint8_t kCmdErase      = 0xA4;
+constexpr std::uint8_t kCmdProgram    = 0xA5;
+constexpr std::uint8_t kCmdVerify     = 0xA6;
+constexpr std::uint8_t kCmdReadConfig = 0xA7;
 
-constexpr std::uint8_t kConfigMaskAll  = 0x1F;
+constexpr std::uint8_t kConfigMaskAll = 0x1F;
 
 } // namespace
 
@@ -41,12 +41,12 @@ bool Isp::read_response(std::uint8_t* response, std::uint8_t& response_length, s
     const std::uint32_t deadline = systick::now() + timeout_ms * clock::kTicksPerMs;
     std::size_t         received = 0;
 
-    response_length = 0;
+    response_length              = 0;
     while (received < 64)
     {
         std::uint8_t chunk = 0;
-        const auto result = m_host.bulk_in(m_host.info().bulk_in, response + received, chunk,
-                                           static_cast<std::uint32_t>(20u * 1000u));
+        const auto   result =
+            m_host.bulk_in(m_host.info().bulk_in, response + received, chunk, static_cast<std::uint32_t>(20u * 1000u));
 
         if (result == usbhost::Result::ok)
         {
@@ -176,10 +176,10 @@ bool Isp::begin(std::uint32_t image_size, Info& info) noexcept
         return false;
     }
 
-    m_active = false;
+    m_active       = false;
     m_write_closed = false;
     m_next_address = 0;
-    m_info = Info{};
+    m_info         = Info{};
 
     if (m_host.info().bulk_out == 0 || m_host.info().bulk_in == 0)
     {
@@ -202,8 +202,8 @@ bool Isp::begin(std::uint32_t image_size, Info& info) noexcept
     {
         return false;
     }
-    m_info.chip_id     = response[4];
-    m_info.device_type = response[5];
+    m_info.chip_id              = response[4];
+    m_info.device_type          = response[5];
 
     // READ_CONFIG(all): UID starts at payload offset 18.
     std::uint8_t read_config[5] = {kCmdReadConfig, 0x02, 0x00, kConfigMaskAll, 0x00};

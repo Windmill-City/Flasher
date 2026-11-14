@@ -11,9 +11,9 @@ Uart* g_uart1_instance = nullptr;
 namespace
 {
 
-inline constexpr std::size_t   kTxFifoDepth = 8;
+inline constexpr std::size_t kTxFifoDepth = 8;
 
-std::uint8_t make_lcr(const LineCoding& coding) noexcept
+std::uint8_t                 make_lcr(const LineCoding& coding) noexcept
 {
     std::uint8_t data_bits = coding.data_bits;
     if (data_bits < 5 || data_bits > 8)
@@ -93,8 +93,8 @@ void Uart::init(std::uint32_t baud) noexcept
 
     set_baud(baud);
 
-    uart1::fcr() = static_cast<std::uint8_t>((2u << 6) | uart1::kFcrFifoEnable | uart1::kFcrRxClear
-                                            | uart1::kFcrTxClear);
+    uart1::fcr() =
+        static_cast<std::uint8_t>((2u << 6) | uart1::kFcrFifoEnable | uart1::kFcrRxClear | uart1::kFcrTxClear);
     uart1::lcr() = uart1::kLcrWordSizeMask;
     uart1::ier() = uart1::kIerTxdEnable | uart1::kIerRecvReady;
     uart1::mcr() |= uart1::kMcrIrqOutput;

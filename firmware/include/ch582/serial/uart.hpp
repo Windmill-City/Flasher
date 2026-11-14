@@ -19,9 +19,9 @@ class Uart
     static constexpr std::uint32_t kBaudRate     = 115200;
     static constexpr std::size_t   kRxBufferSize = 512;
 
-    void        init(std::uint32_t baud = kBaudRate) noexcept;
-    void        deinit() noexcept;
-    void        configure(const LineCoding& coding) noexcept;
+    void                           init(std::uint32_t baud = kBaudRate) noexcept;
+    void                           deinit() noexcept;
+    void                           configure(const LineCoding& coding) noexcept;
 
     CH582_HIGH_CODE std::size_t read(std::uint8_t* dst, std::size_t max_length) noexcept;
     void                        write(const std::uint8_t* src, std::size_t length) noexcept;
@@ -33,7 +33,7 @@ class Uart
     }
 
   private:
-    void        set_baud(std::uint32_t baud) noexcept;
+    void                      set_baud(std::uint32_t baud) noexcept;
 
     RingBuffer<kRxBufferSize> m_rx;
     bool                      m_active = false;

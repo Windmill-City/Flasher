@@ -150,15 +150,15 @@ inline Pfic& pfic() noexcept
 
 inline void enable_irq(Irq irq) noexcept
 {
-    const auto index    = static_cast<std::uint32_t>(irq) >> 5;
-    const auto bit      = 1u << (static_cast<std::uint32_t>(irq) & 0x1Fu);
+    const auto index   = static_cast<std::uint32_t>(irq) >> 5;
+    const auto bit     = 1u << (static_cast<std::uint32_t>(irq) & 0x1Fu);
     pfic().ienr[index] = bit;
 }
 
 inline void disable_irq(Irq irq) noexcept
 {
-    const auto index    = static_cast<std::uint32_t>(irq) >> 5;
-    const auto bit      = 1u << (static_cast<std::uint32_t>(irq) & 0x1Fu);
+    const auto index   = static_cast<std::uint32_t>(irq) >> 5;
+    const auto bit     = 1u << (static_cast<std::uint32_t>(irq) & 0x1Fu);
     pfic().irer[index] = bit;
     fence_i();
 }
@@ -177,15 +177,15 @@ inline volatile std::uint32_t&  ctrl() noexcept
     return mmio::ref<std::uint32_t>(kBase + 0x00u);
 }
 
-inline volatile std::uint32_t&  now() noexcept
+inline volatile std::uint32_t& now() noexcept
 {
     return mmio::ref<std::uint32_t>(kBase + 0x08u);
 }
 
-inline constexpr std::uint32_t  kCtrlEnable = 1u << 0;
-inline constexpr std::uint32_t  kCtrlClockHclk = 1u << 2;
+inline constexpr std::uint32_t kCtrlEnable    = 1u << 0;
+inline constexpr std::uint32_t kCtrlClockHclk = 1u << 2;
 
-inline bool                     expired(std::uint32_t deadline) noexcept
+inline bool                    expired(std::uint32_t deadline) noexcept
 {
     return static_cast<std::int32_t>(now() - deadline) >= 0;
 }
@@ -220,10 +220,10 @@ inline volatile std::uint8_t& reset_watchdog_ctrl() noexcept
     return mmio::ref<std::uint8_t>(0x40001046u);
 }
 
-inline constexpr std::uint8_t kWatchdogResetEnable = 0x02;
-inline constexpr std::uint8_t kWatchdogIrqEnable   = 0x04;
-inline constexpr std::uint8_t kSoftwareReset       = 0x01;
-inline constexpr std::uint8_t kBootLoadManual      = 0x00;
+inline constexpr std::uint8_t  kWatchdogResetEnable = 0x02;
+inline constexpr std::uint8_t  kWatchdogIrqEnable   = 0x04;
+inline constexpr std::uint8_t  kSoftwareReset       = 0x01;
+inline constexpr std::uint8_t  kBootLoadManual      = 0x00;
 
 inline volatile std::uint16_t& clock_sys_cfg() noexcept
 {
@@ -259,9 +259,9 @@ inline volatile std::uint8_t& sleep_power_ctrl() noexcept
     return mmio::ref<std::uint8_t>(0x4000100Fu);
 }
 
-inline constexpr std::uint8_t kSleepClkUart1 = 0x20;
-inline constexpr std::uint8_t kSleepClkUsb   = 0x10;
-inline constexpr std::uint8_t kSleepClkUsb2  = 0x20;
+inline constexpr std::uint8_t  kSleepClkUart1 = 0x20;
+inline constexpr std::uint8_t  kSleepClkUsb   = 0x10;
+inline constexpr std::uint8_t  kSleepClkUsb2  = 0x20;
 
 inline volatile std::uint16_t& pin_alternate() noexcept
 {
@@ -273,11 +273,11 @@ inline volatile std::uint16_t& pin_analog_ie() noexcept
     return mmio::ref<std::uint16_t>(0x4000101Au);
 }
 
-inline constexpr std::uint16_t kPinUart1     = 0x0020;
-inline constexpr std::uint16_t kPinUsb2Ie    = 0x0020;
-inline constexpr std::uint16_t kPinUsb2DpPu  = 0x0010;
-inline constexpr std::uint16_t kPinUsbIe     = 0x0080;
-inline constexpr std::uint16_t kPinUsbDpPu   = 0x0040;
+inline constexpr std::uint16_t kPinUart1    = 0x0020;
+inline constexpr std::uint16_t kPinUsb2Ie   = 0x0020;
+inline constexpr std::uint16_t kPinUsb2DpPu = 0x0010;
+inline constexpr std::uint16_t kPinUsbIe    = 0x0080;
+inline constexpr std::uint16_t kPinUsbDpPu  = 0x0040;
 
 inline volatile std::uint32_t& misc_ctrl() noexcept
 {
@@ -377,22 +377,27 @@ inline volatile std::uint32_t& dir() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010A0u);
 }
+
 inline volatile std::uint32_t& pin() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010A4u);
 }
+
 inline volatile std::uint32_t& out() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010A8u);
 }
+
 inline volatile std::uint32_t& clr() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010ACu);
 }
+
 inline volatile std::uint32_t& pu() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010B0u);
 }
+
 inline volatile std::uint32_t& pd_drv() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010B4u);
@@ -405,22 +410,27 @@ inline volatile std::uint32_t& dir() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010C0u);
 }
+
 inline volatile std::uint32_t& pin() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010C4u);
 }
+
 inline volatile std::uint32_t& out() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010C8u);
 }
+
 inline volatile std::uint32_t& clr() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010CCu);
 }
+
 inline volatile std::uint32_t& pu() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010D0u);
 }
+
 inline volatile std::uint32_t& pd_drv() noexcept
 {
     return mmio::ref<std::uint32_t>(0x400010D4u);
@@ -440,56 +450,66 @@ inline volatile std::uint8_t& mcr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003400u);
 }
+
 inline volatile std::uint8_t& ier() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003401u);
 }
+
 inline volatile std::uint8_t& fcr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003402u);
 }
+
 inline volatile std::uint8_t& lcr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003403u);
 }
+
 inline volatile std::uint8_t& lsr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003405u);
 }
+
 inline volatile std::uint8_t& rbr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003408u);
 }
+
 inline volatile std::uint8_t& thr() noexcept
 {
     return mmio::ref<std::uint8_t>(0x40003408u);
 }
+
 inline volatile std::uint8_t& rfc() noexcept
 {
     return mmio::ref<std::uint8_t>(0x4000340Au);
 }
+
 inline volatile std::uint8_t& tfc() noexcept
 {
     return mmio::ref<std::uint8_t>(0x4000340Bu);
 }
+
 inline volatile std::uint16_t& divisor() noexcept
 {
     return mmio::ref<std::uint16_t>(0x4000340Cu);
 }
+
 inline volatile std::uint8_t& div() noexcept
 {
     return mmio::ref<std::uint8_t>(0x4000340Eu);
 }
 
-inline constexpr std::uint8_t kMcrIrqOutput     = 0x08;
-inline constexpr std::uint8_t kIerRecvReady     = 0x01;
-inline constexpr std::uint8_t kIerTxdEnable     = 0x40;
-inline constexpr std::uint8_t kFcrFifoEnable    = 0x01;
-inline constexpr std::uint8_t kFcrRxClear       = 0x02;
-inline constexpr std::uint8_t kFcrTxClear       = 0x04;
-inline constexpr std::uint8_t kLcrWordSizeMask  = 0x03;
-inline constexpr std::uint8_t kLcrStopBits      = 0x04;
-inline constexpr std::uint8_t kLcrParityEnable  = 0x08;
+inline constexpr std::uint8_t kMcrIrqOutput    = 0x08;
+inline constexpr std::uint8_t kIerRecvReady    = 0x01;
+inline constexpr std::uint8_t kIerTxdEnable    = 0x40;
+inline constexpr std::uint8_t kFcrFifoEnable   = 0x01;
+inline constexpr std::uint8_t kFcrRxClear      = 0x02;
+inline constexpr std::uint8_t kFcrTxClear      = 0x04;
+inline constexpr std::uint8_t kLcrWordSizeMask = 0x03;
+inline constexpr std::uint8_t kLcrStopBits     = 0x04;
+inline constexpr std::uint8_t kLcrParityEnable = 0x08;
 
 } // namespace uart1
 
@@ -512,123 +532,141 @@ inline volatile std::uint8_t& ctrl() noexcept
 {
     return at<std::uint8_t>(0x00);
 }
+
 inline volatile std::uint8_t& dev_ctrl() noexcept
 {
     return at<std::uint8_t>(0x01);
 }
+
 inline volatile std::uint8_t& int_en() noexcept
 {
     return at<std::uint8_t>(0x02);
 }
+
 inline volatile std::uint8_t& dev_addr() noexcept
 {
     return at<std::uint8_t>(0x03);
 }
+
 inline volatile std::uint8_t& misc_status() noexcept
 {
     return at<std::uint8_t>(0x05);
 }
+
 inline volatile std::uint8_t& int_fg() noexcept
 {
     return at<std::uint8_t>(0x06);
 }
+
 inline volatile std::uint8_t& int_st() noexcept
 {
     return at<std::uint8_t>(0x07);
 }
+
 inline volatile std::uint8_t& rx_len() noexcept
 {
     return at<std::uint8_t>(0x08);
 }
+
 inline volatile std::uint8_t& ep4_1_mod() noexcept
 {
     return at<std::uint8_t>(0x0C);
 }
+
 inline volatile std::uint8_t& ep2_3_mod() noexcept
 {
     return at<std::uint8_t>(0x0D);
 }
+
 inline volatile std::uint16_t& ep0_dma() noexcept
 {
     return at<std::uint16_t>(0x10);
 }
+
 inline volatile std::uint16_t& ep1_dma() noexcept
 {
     return at<std::uint16_t>(0x14);
 }
+
 inline volatile std::uint16_t& ep2_dma() noexcept
 {
     return at<std::uint16_t>(0x18);
 }
+
 inline volatile std::uint8_t& ep0_t_len() noexcept
 {
     return at<std::uint8_t>(0x20);
 }
+
 inline volatile std::uint8_t& ep0_ctrl() noexcept
 {
     return at<std::uint8_t>(0x22);
 }
+
 inline volatile std::uint8_t& ep1_t_len() noexcept
 {
     return at<std::uint8_t>(0x24);
 }
+
 inline volatile std::uint8_t& ep1_ctrl() noexcept
 {
     return at<std::uint8_t>(0x26);
 }
+
 inline volatile std::uint8_t& ep2_t_len() noexcept
 {
     return at<std::uint8_t>(0x28);
 }
+
 inline volatile std::uint8_t& ep2_ctrl() noexcept
 {
     return at<std::uint8_t>(0x2A);
 }
 
-inline constexpr std::uint8_t kUcHostMode      = 0x80;
-inline constexpr std::uint8_t kUcLowSpeed      = 0x40;
-inline constexpr std::uint8_t kUcDevPuEn       = 0x20;
-inline constexpr std::uint8_t kUcIntBusy       = 0x08;
-inline constexpr std::uint8_t kUcResetSie      = 0x04;
-inline constexpr std::uint8_t kUcClrAll        = 0x02;
-inline constexpr std::uint8_t kUcDmaEn         = 0x01;
+inline constexpr std::uint8_t kUcHostMode     = 0x80;
+inline constexpr std::uint8_t kUcLowSpeed     = 0x40;
+inline constexpr std::uint8_t kUcDevPuEn      = 0x20;
+inline constexpr std::uint8_t kUcIntBusy      = 0x08;
+inline constexpr std::uint8_t kUcResetSie     = 0x04;
+inline constexpr std::uint8_t kUcClrAll       = 0x02;
+inline constexpr std::uint8_t kUcDmaEn        = 0x01;
 
-inline constexpr std::uint8_t kUdPdDis         = 0x80;
-inline constexpr std::uint8_t kUdPortEn        = 0x01;
+inline constexpr std::uint8_t kUdPdDis        = 0x80;
+inline constexpr std::uint8_t kUdPortEn       = 0x01;
 
-inline constexpr std::uint8_t kUieSuspend      = 0x04;
-inline constexpr std::uint8_t kUieTransfer     = 0x02;
-inline constexpr std::uint8_t kUieBusReset     = 0x01;
+inline constexpr std::uint8_t kUieSuspend     = 0x04;
+inline constexpr std::uint8_t kUieTransfer    = 0x02;
+inline constexpr std::uint8_t kUieBusReset    = 0x01;
 
-inline constexpr std::uint8_t kUifToggleOk     = 0x40;
-inline constexpr std::uint8_t kUifSuspend      = 0x04;
-inline constexpr std::uint8_t kUifTransfer     = 0x02;
-inline constexpr std::uint8_t kUifBusReset     = 0x01;
+inline constexpr std::uint8_t kUifToggleOk    = 0x40;
+inline constexpr std::uint8_t kUifSuspend     = 0x04;
+inline constexpr std::uint8_t kUifTransfer    = 0x02;
+inline constexpr std::uint8_t kUifBusReset    = 0x01;
 
-inline constexpr std::uint8_t kUisSetupAct     = 0x80;
-inline constexpr std::uint8_t kUisToggleOk     = 0x40;
-inline constexpr std::uint8_t kMaskUisToken    = 0x30;
-inline constexpr std::uint8_t kUisTokenOut     = 0x00;
-inline constexpr std::uint8_t kUisTokenIn      = 0x20;
+inline constexpr std::uint8_t kUisSetupAct    = 0x80;
+inline constexpr std::uint8_t kUisToggleOk    = 0x40;
+inline constexpr std::uint8_t kMaskUisToken   = 0x30;
+inline constexpr std::uint8_t kUisTokenOut    = 0x00;
+inline constexpr std::uint8_t kUisTokenIn     = 0x20;
 
-inline constexpr std::uint8_t kUep1RxEn        = 0x80;
-inline constexpr std::uint8_t kUep1TxEn        = 0x40;
-inline constexpr std::uint8_t kUep2RxEn        = 0x08;
-inline constexpr std::uint8_t kUep2TxEn        = 0x04;
+inline constexpr std::uint8_t kUep1RxEn       = 0x80;
+inline constexpr std::uint8_t kUep1TxEn       = 0x40;
+inline constexpr std::uint8_t kUep2RxEn       = 0x08;
+inline constexpr std::uint8_t kUep2TxEn       = 0x04;
 
-inline constexpr std::uint8_t kUepRTog         = 0x80;
-inline constexpr std::uint8_t kUepTTog         = 0x40;
-inline constexpr std::uint8_t kUepAutoTog      = 0x10;
-inline constexpr std::uint8_t kMaskUepRRes     = 0x0C;
-inline constexpr std::uint8_t kUepRResAck      = 0x00;
-inline constexpr std::uint8_t kUepRResTimeout  = 0x04;
-inline constexpr std::uint8_t kUepRResNak      = 0x08;
-inline constexpr std::uint8_t kUepRResStall    = 0x0C;
-inline constexpr std::uint8_t kMaskUepTRes     = 0x03;
-inline constexpr std::uint8_t kUepTResAck      = 0x00;
-inline constexpr std::uint8_t kUepTResTimeout  = 0x01;
-inline constexpr std::uint8_t kUepTResNak      = 0x02;
-inline constexpr std::uint8_t kUepTResStall    = 0x03;
+inline constexpr std::uint8_t kUepRTog        = 0x80;
+inline constexpr std::uint8_t kUepTTog        = 0x40;
+inline constexpr std::uint8_t kUepAutoTog     = 0x10;
+inline constexpr std::uint8_t kMaskUepRRes    = 0x0C;
+inline constexpr std::uint8_t kUepRResAck     = 0x00;
+inline constexpr std::uint8_t kUepRResTimeout = 0x04;
+inline constexpr std::uint8_t kUepRResNak     = 0x08;
+inline constexpr std::uint8_t kUepRResStall   = 0x0C;
+inline constexpr std::uint8_t kMaskUepTRes    = 0x03;
+inline constexpr std::uint8_t kUepTResAck     = 0x00;
+inline constexpr std::uint8_t kUepTResTimeout = 0x01;
+inline constexpr std::uint8_t kUepTResNak     = 0x02;
+inline constexpr std::uint8_t kUepTResStall   = 0x03;
 
 } // namespace usbreg
 
@@ -647,62 +685,77 @@ inline volatile std::uint8_t& ctrl() noexcept
 {
     return at<std::uint8_t>(0x00);
 }
+
 inline volatile std::uint8_t& host_ctrl() noexcept
 {
     return at<std::uint8_t>(0x01);
 }
+
 inline volatile std::uint8_t& int_en() noexcept
 {
     return at<std::uint8_t>(0x02);
 }
+
 inline volatile std::uint8_t& dev_addr() noexcept
 {
     return at<std::uint8_t>(0x03);
 }
+
 inline volatile std::uint8_t& misc_status() noexcept
 {
     return at<std::uint8_t>(0x05);
 }
+
 inline volatile std::uint8_t& int_fg() noexcept
 {
     return at<std::uint8_t>(0x06);
 }
+
 inline volatile std::uint8_t& int_st() noexcept
 {
     return at<std::uint8_t>(0x07);
 }
+
 inline volatile std::uint8_t& rx_len() noexcept
 {
     return at<std::uint8_t>(0x08);
 }
+
 inline volatile std::uint8_t& ep2_3_mod() noexcept
 {
     return at<std::uint8_t>(0x0D);
 }
+
 inline volatile std::uint16_t& ep2_dma() noexcept
 {
     return at<std::uint16_t>(0x18);
 }
+
 inline volatile std::uint16_t& ep3_dma() noexcept
 {
     return at<std::uint16_t>(0x1C);
 }
+
 inline volatile std::uint8_t& ep1_ctrl() noexcept
 {
     return at<std::uint8_t>(0x26);
 }
+
 inline volatile std::uint8_t& ep2_t_len() noexcept
 {
     return at<std::uint8_t>(0x28);
 }
+
 inline volatile std::uint8_t& ep2_ctrl() noexcept
 {
     return at<std::uint8_t>(0x2A);
 }
+
 inline volatile std::uint8_t& ep3_t_len() noexcept
 {
     return at<std::uint8_t>(0x2C);
 }
+
 inline volatile std::uint8_t& ep3_ctrl() noexcept
 {
     return at<std::uint8_t>(0x2E);
@@ -712,30 +765,37 @@ inline volatile std::uint8_t& host_ep_mod() noexcept
 {
     return ep2_3_mod();
 }
+
 inline volatile std::uint16_t& host_rx_dma() noexcept
 {
     return ep2_dma();
 }
+
 inline volatile std::uint16_t& host_tx_dma() noexcept
 {
     return ep3_dma();
 }
+
 inline volatile std::uint8_t& host_setup() noexcept
 {
     return ep1_ctrl();
 }
+
 inline volatile std::uint8_t& host_ep_pid() noexcept
 {
     return ep2_t_len();
 }
+
 inline volatile std::uint8_t& host_rx_ctrl() noexcept
 {
     return ep2_ctrl();
 }
+
 inline volatile std::uint8_t& host_tx_len() noexcept
 {
     return ep3_t_len();
 }
+
 inline volatile std::uint8_t& host_tx_ctrl() noexcept
 {
     return ep3_ctrl();
