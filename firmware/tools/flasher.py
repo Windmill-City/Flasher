@@ -56,6 +56,12 @@ ISP_WRITE_CONFIG = 0xA8
 
 CFG_DEBUG_EN = 1 << 4
 
+# CH570/CH572 keep the code-flash protection marker in the first config word.
+# An erased marker (0xFF) makes the bootloader reject every PROGRAM with 0xFE.
+CFG_CODE_UNLOCK = 0xA5
+CHIP_CH570 = 0x70
+CHIP_CH572 = 0x72
+
 MODE_IDLE = 0
 MODE_MASTER = 1
 MODE_SLAVE = 2
@@ -182,7 +188,7 @@ class Flasher:
         if len(image) % 1024:
             image += b"\xff" * (1024 - len(image) % 1024)
 
-        self.clear_debug_enable(debug)
+        self.prepare_target(debug)
 
         info = self.request(CMD_ISP_BEGIN, len(image).to_bytes(4, "little"), timeout=30)
         chip_id = info[1]
@@ -217,15 +223,42 @@ class Flasher:
             raise
         print("done")
 
-    def clear_debug_enable(self, debug: bool = False) -> None:
-        """Clear CFG_DEBUG_EN, which makes the bootloader reject flash writes.
+    def prepare_target(self, debug: bool = False) -> None:
+        """Put the target in a state that accepts code-flash writes.
 
-        A chip with debug enabled answers PROGRAM with "A5 ... FE 00" and every
-        VERIFY with "FE 00". WCHISPStudio clears the bit before programming.
+        CH570/CH572 store a code-flash protection marker in the first config
+        word. An erased marker (0xFF) makes the bootloader answer every PROGRAM
+        with "A5 ... FE", so write the 0xA5/0x5A unlock value and reboot.
+
+        CH58x instead blocks writes while CFG_DEBUG_EN is set; a chip with
+        debug enabled answers PROGRAM with "A5 ... FE 00" and every VERIFY with
+        "FE 00". WCHISPStudio clears the bit before programming.
         """
         self.isp_open()
         session = IspSession(self, debug)
         session.identify()
+
+        if session.chip_id in (CHIP_CH570, CHIP_CH572):
+            if session.config[0] == CFG_CODE_UNLOCK:
+                return
+
+            session.send_key()
+            fixed = bytearray(session.config)
+            fixed[0] = CFG_CODE_UNLOCK
+            fixed[1] = 0x5A
+            print(f"CFG {session.config.hex()}: enabling code flash access")
+            session.write_config(bytes(fixed))
+            session.reboot()
+            time.sleep(0.2)
+
+            self.isp_open()
+            session = IspSession(self, debug)
+            session.identify()
+            if session.config[0] != CFG_CODE_UNLOCK:
+                raise RuntimeError(f"failed to unlock code flash (CFG={session.config.hex()})")
+            print(f"CFG now {session.config.hex()}")
+            return
+
         if not (session.user_cfg & CFG_DEBUG_EN):
             return
 
@@ -255,6 +288,8 @@ class IspSession:
         self.uid = bytes(8)
         self.config = bytes(12)
         self.user_cfg = 0
+        self.key = bytes(8)
+        self.key_sum = 0
 
     def transfer(self, frame: bytes, timeout: float = 6.0) -> bytes:
         if len(frame) > 63:
@@ -285,10 +320,21 @@ class IspSession:
         self.config = config[4 + 2:4 + 14]
         self.user_cfg = int.from_bytes(self.config[8:12], "little")
         self.uid = config[4 + 18:4 + 26]
+
+        total = sum(self.uid) & 0xFF
+        self.key = bytes([total] * 7 + [(total + self.chip_id) & 0xFF])
+        self.key_sum = sum(self.key) & 0xFF
+
         if self.debug:
             print(f"  chip={self.chip_id:#04x} type={self.device_type:#04x} "
                   f"uid={self.uid.hex()} config={self.config.hex()} "
                   f"user_cfg={self.user_cfg:#010x}")
+
+    def send_key(self) -> None:
+        """Arm the XOR key the bootloader derives from the UID."""
+        raw = self.transfer(bytes((ISP_KEY, 0x1E, 0x00)) + bytes(30))
+        if len(raw) < 5 or raw[4] != self.key_sum:
+            raise RuntimeError(f"ISP key rejected (expected checksum {self.key_sum:#04x})")
 
     def write_config(self, config: bytes) -> None:
         if len(config) != 12:
