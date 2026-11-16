@@ -376,6 +376,7 @@ void Device::irq_handler()
         usbreg::dev_addr()    = 0;
         m_device_info.address = 0;
         m_device_info.config  = 0;
+        m_tx_zlp_pending      = false;
         usbreg::int_fg()      = usbreg::kUifBusReset;
     }
     else if ((usbreg::int_fg() & usbreg::kUifSuspend) != 0)
@@ -445,13 +446,21 @@ void Device::poll()
         return;
     }
 
-    std::uint8_t length = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize - 1, m_tx->size()));
-    if (length == 0)
+    std::uint8_t length = 0;
+    if (m_tx->size() != 0)
+    {
+        length           = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize, m_tx->size()));
+        length           = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
+        m_tx_zlp_pending = length == static_cast<std::uint8_t>(kPacketSize);
+    }
+    else if (m_tx_zlp_pending)
+    {
+        m_tx_zlp_pending = false;
+    }
+    else
     {
         return;
     }
-
-    length = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
 
     CriticalSection guard;
     if ((usbreg::ep2_ctrl() & usbreg::kMaskUepTRes) == usbreg::kUepTResNak)

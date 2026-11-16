@@ -105,7 +105,8 @@ class Device
     alignas(4) std::uint8_t m_ep2_buffer[2 * kPacketSize]{};
 
     RingBuffer<kUsbBufferSize> m_rx_buffer;
-    RingBuffer<512>*           m_tx = nullptr;
+    RingBuffer<512>*           m_tx             = nullptr;
+    bool                       m_tx_zlp_pending = false;
 };
 
 } // namespace ch582::usb
