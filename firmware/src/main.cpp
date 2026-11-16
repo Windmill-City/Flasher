@@ -14,7 +14,6 @@ namespace
 {
 
 inline constexpr std::uint32_t kLedPin  = gpio::kPin12; // PA12, active high
-inline constexpr std::uint32_t kBootPin = gpio::kPin22; // PB22, BOOT button
 inline constexpr std::uint32_t kVbusPin = gpio::kPin4;  // PB4, MT9700 enable
 
 } // namespace
@@ -30,20 +29,15 @@ int main()
     clock::init();
 
     // Status LED and the USB-A VBUS load switch start off.
-    gpio::pa::dir() |= kLedPin;
     gpio::pa::out() &= ~kLedPin;
 
     gpio::pb::dir() |= kVbusPin;
     gpio::pb::out() &= ~kVbusPin;
 
-    // BOOT is only a local button; keep it pulled up and unused.
-    gpio::pb::dir() &= ~kBootPin;
-    gpio::pb::pu() |= kBootPin;
-
-    auto&                usb = usb::Device::instance();
+    auto&                usb  = usb::Device::instance();
+    auto&                uart = serial::Uart::instance();
 
     static usbhost::Host host;
-    static serial::Uart  uart;
     static isp::Isp      isp(host);
     static app::App      app(usb, host, uart, isp);
 

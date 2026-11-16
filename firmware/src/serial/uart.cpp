@@ -6,7 +6,11 @@
 namespace ch582::serial
 {
 
-Uart* g_uart1_instance = nullptr;
+Uart& Uart::instance() noexcept
+{
+    static Uart uart;
+    return uart;
+}
 
 namespace
 {
@@ -77,7 +81,6 @@ void Uart::set_baud(std::uint32_t baud) noexcept
 
 void Uart::init(std::uint32_t baud) noexcept
 {
-    g_uart1_instance = this;
     // PB12/PB13 belong to USB2 when the host is active; take them back as
     // digital UART pins.
     sysreg::pin_analog_ie() &= static_cast<std::uint16_t>(~(sysreg::kPinUsb2Ie | sysreg::kPinUsb2DpPu));
@@ -129,11 +132,7 @@ void Uart::configure(const LineCoding& coding) noexcept
 
     set_baud(coding.baud_rate);
     uart1::lcr() = make_lcr(coding);
-
-    std::uint8_t scratch[32];
-    while (m_rx.read(scratch, sizeof(scratch)) != 0)
-    {
-    }
+    m_rx.clear();
 }
 
 CH582_HIGH_CODE std::size_t Uart::read(std::uint8_t* dst, std::size_t max_length) noexcept
@@ -177,9 +176,6 @@ extern "C"
 {
 CH582_INTERRUPT CH582_HIGH_CODE void UART1_IRQHandler(void)
 {
-    if (ch582::serial::g_uart1_instance != nullptr)
-    {
-        ch582::serial::g_uart1_instance->irq_handler();
-    }
+    ch582::serial::Uart::instance().irq_handler();
 }
 }

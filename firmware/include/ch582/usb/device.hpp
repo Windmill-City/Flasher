@@ -58,12 +58,11 @@ class Device
     }
 
   private:
-    Device()                                     = default;
+    Device()                                    = default;
 
-    static constexpr std::size_t  kEp0Size       = 64;
-    static constexpr std::size_t  kPacketSize    = 64;
-    static constexpr std::size_t  kUsbBufferSize = 512;
-    static constexpr std::uint8_t kInNak         = 2;
+    static constexpr std::size_t kEp0Size       = 64;
+    static constexpr std::size_t kPacketSize    = 64;
+    static constexpr std::size_t kUsbBufferSize = 512;
 
     struct DeviceInfo
     {

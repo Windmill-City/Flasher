@@ -27,7 +27,7 @@ APP_CXX       := src/main.cpp \
                  src/app/app.cpp
 
 LDSCRIPT      := ld/ch582.ld
-LIBS          := -lm
+LIBS          :=
 
 OBJECTS       := $(patsubst %.cpp,$(BUILD)/%.o,$(APP_CXX)) \
                  $(BUILD)/src/platform/startup_ch582.o

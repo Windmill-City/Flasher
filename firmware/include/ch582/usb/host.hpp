@@ -13,25 +13,11 @@ struct DeviceInfo
 {
     std::uint16_t vid          = 0;
     std::uint16_t pid          = 0;
-    std::uint8_t  address      = 0;
-    std::uint8_t  ep0_size     = 8;
     std::uint8_t  config_value = 1;
-    std::uint8_t  device_class = 0;
     std::uint8_t  bulk_in      = 0;
     std::uint8_t  bulk_out     = 0;
     std::uint8_t  cdc_comm_itf = 0;
-    std::uint8_t  cdc_data_itf = 0;
     bool          has_cdc      = false;
-};
-
-enum class Xfer : std::uint8_t
-{
-    ok,
-    nak,
-    stall,
-    timeout,
-    disconnected,
-    error,
 };
 
 enum class Result : std::uint8_t
@@ -60,7 +46,6 @@ class Host
     bool   attached() const noexcept;
     Result enumerate(DeviceInfo& info, std::uint32_t timeout_ms = 800) noexcept;
 
-    Result set_configuration(std::uint8_t value) noexcept;
     Result set_line_coding(std::uint8_t itf, const serial::LineCoding& coding) noexcept;
     Result set_control_line_state(std::uint8_t itf, std::uint16_t state) noexcept;
 
@@ -78,20 +63,23 @@ class Host
     }
 
   private:
-    Xfer       transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeout_us) noexcept;
-    Result     control_transfer(std::uint8_t   request_type,
-                                std::uint8_t   request,
-                                std::uint16_t  value,
-                                std::uint16_t  index,
-                                const void*    out,
-                                std::uint16_t  out_length,
-                                void*          in,
-                                std::uint16_t  in_length,
-                                std::uint16_t* actual = nullptr) noexcept;
+    Result     transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeout_us) noexcept;
+    Result     control_transfer(std::uint8_t  request_type,
+                                std::uint8_t  request,
+                                std::uint16_t value,
+                                std::uint16_t index,
+                                const void*   out,
+                                std::uint16_t out_length,
+                                void*         in,
+                                std::uint16_t in_length) noexcept;
     Result     get_descriptor(std::uint8_t type, std::uint8_t index, void* buffer, std::uint16_t length) noexcept;
     Result     set_address(std::uint8_t address) noexcept;
+    Result     set_configuration(std::uint8_t value) noexcept;
+    bool       wait_attached(std::uint32_t timeout_ms) noexcept;
     void       bus_reset() noexcept;
     void       pins_as_gpio(bool dplus_high) noexcept;
+    void       release_pins(bool pull_down) noexcept;
+    void       power_cycle_floating(std::uint32_t delay_ms) noexcept;
     void       parse_config(const std::uint8_t* config, std::uint16_t length) noexcept;
 
     DeviceInfo m_info;

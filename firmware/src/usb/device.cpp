@@ -11,9 +11,7 @@ namespace ch582::usb
 namespace
 {
 
-constexpr std::uint8_t kCdcSetCommFeature      = 0x02;
 constexpr std::uint8_t kCdcGetCommFeature      = 0x03;
-constexpr std::uint8_t kCdcClearCommFeature    = 0x04;
 constexpr std::uint8_t kCdcSetLineCoding       = 0x20;
 constexpr std::uint8_t kCdcGetLineCoding       = 0x21;
 constexpr std::uint8_t kCdcSetControlLineState = 0x22;
@@ -40,6 +38,34 @@ constexpr std::uint8_t kReqGetConfiguration    = 0x08;
 constexpr std::uint8_t kReqSetConfiguration    = 0x09;
 constexpr std::uint8_t kReqGetInterface        = 0x0A;
 constexpr std::uint8_t kReqSetInterface        = 0x0B;
+
+inline void            clear_tx_toggle(volatile std::uint8_t& ctrl) noexcept
+{
+    ctrl = static_cast<std::uint8_t>((ctrl & ~(usbreg::kUepTTog | usbreg::kMaskUepTRes)) | usbreg::kUepTResNak);
+}
+
+inline void clear_rx_toggle(volatile std::uint8_t& ctrl) noexcept
+{
+    ctrl = static_cast<std::uint8_t>((ctrl & ~(usbreg::kUepRTog | usbreg::kMaskUepRRes)) | usbreg::kUepRResAck);
+}
+
+bool clear_endpoint_toggle(std::uint8_t endpoint) noexcept
+{
+    switch (endpoint)
+    {
+    case 0x82:
+        clear_tx_toggle(usbreg::ep2_ctrl());
+        return true;
+    case 0x02:
+        clear_rx_toggle(usbreg::ep2_ctrl());
+        return true;
+    case 0x81:
+        clear_tx_toggle(usbreg::ep1_ctrl());
+        return true;
+    default:
+        return false;
+    }
+}
 
 } // namespace
 
@@ -112,28 +138,24 @@ void Device::handle_setup()
         {
         case kReqGetDescriptor:
         {
-            const std::uint8_t  type              = setup->value_h;
-            const std::uint8_t* descriptor        = find_descriptor(kDescriptors, type);
-            std::uint16_t       descriptor_length = 0;
-            if (descriptor != nullptr)
-            {
-                descriptor_length = descriptor[0];
-                if (type == kDescriptorConfig && descriptor[0] >= 4)
-                {
-                    // For a configuration descriptor bLength is only the 9-byte
-                    // header; the full size is wTotalLength.
-                    descriptor_length = static_cast<std::uint16_t>(descriptor[2] | (descriptor[3] << 8));
-                }
-                if (descriptor_length > 255)
-                {
-                    descriptor_length = 255;
-                }
-            }
-
+            const std::uint8_t  type       = setup->value_h;
+            const std::uint8_t* descriptor = find_descriptor(kDescriptors, type);
             if (descriptor == nullptr)
             {
                 length = kStall;
                 break;
+            }
+
+            std::uint16_t descriptor_length = descriptor[0];
+            if (type == kDescriptorConfig && descriptor[0] >= 4)
+            {
+                // For a configuration descriptor bLength is only the 9-byte
+                // header; the full size is wTotalLength.
+                descriptor_length = static_cast<std::uint16_t>(descriptor[2] | (descriptor[3] << 8));
+            }
+            if (descriptor_length > 255)
+            {
+                descriptor_length = 255;
             }
 
             m_descriptor = descriptor;
@@ -181,30 +203,14 @@ void Device::handle_setup()
         case kReqClearFeature:
             if ((setup->request_type & kRecipientMask) == kRecipientDevice)
             {
-                usbreg::ep1_ctrl() =
-                    (usbreg::ep1_ctrl() & ~(usbreg::kUepTTog | usbreg::kMaskUepTRes)) | usbreg::kUepTResNak;
-                usbreg::ep2_ctrl() =
-                    (usbreg::ep2_ctrl() & ~(usbreg::kUepTTog | usbreg::kMaskUepTRes)) | usbreg::kUepTResNak;
+                clear_tx_toggle(usbreg::ep1_ctrl());
+                clear_tx_toggle(usbreg::ep2_ctrl());
             }
             else if ((setup->request_type & kRecipientMask) == kRecipientEndpoint)
             {
-                switch (setup->index_l)
+                if (!clear_endpoint_toggle(setup->index_l))
                 {
-                case 0x82:
-                    usbreg::ep2_ctrl() =
-                        (usbreg::ep2_ctrl() & ~(usbreg::kUepTTog | usbreg::kMaskUepTRes)) | usbreg::kUepTResNak;
-                    break;
-                case 0x02:
-                    usbreg::ep2_ctrl() =
-                        (usbreg::ep2_ctrl() & ~(usbreg::kUepRTog | usbreg::kMaskUepRRes)) | usbreg::kUepRResAck;
-                    break;
-                case 0x81:
-                    usbreg::ep1_ctrl() =
-                        (usbreg::ep1_ctrl() & ~(usbreg::kUepTTog | usbreg::kMaskUepTRes)) | usbreg::kUepTResNak;
-                    break;
-                default:
                     length = kStall;
-                    break;
                 }
             }
             else
@@ -247,23 +253,8 @@ void Device::handle_setup()
         }
         else if (m_setup_request == kCdcSetControlLineState)
         {
-            m_control_state     = setup->value_l;
-
-            // SERIAL_STATE: DCD | DSR, on the CDC notification endpoint.
-            m_ep1_buffer[0]     = 0xA1;
-            m_ep1_buffer[1]     = 0x20;
-            m_ep1_buffer[2]     = 0x00;
-            m_ep1_buffer[3]     = 0x00;
-            m_ep1_buffer[4]     = 0x00;
-            m_ep1_buffer[5]     = 0x00;
-            m_ep1_buffer[6]     = 0x02;
-            m_ep1_buffer[7]     = 0x00;
-            m_ep1_buffer[8]     = 0x03;
-            m_ep1_buffer[9]     = 0x00;
-            usbreg::ep1_t_len() = 10;
-            usbreg::ep1_ctrl()  = (usbreg::ep1_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResAck;
-
-            length              = 0;
+            m_control_state = setup->value_l;
+            length          = 0;
         }
         else if (m_setup_request == kCdcSendBreak)
         {
@@ -324,12 +315,12 @@ void Device::irq_handler()
 
             case kTokenIn | 2:
                 usbreg::ep2_ctrl() ^= usbreg::kUepTTog;
-                usbreg::ep2_ctrl() = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepTRes) | kInNak;
+                usbreg::ep2_ctrl() = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResNak;
                 break;
 
             case kTokenIn | 1:
                 usbreg::ep1_ctrl() ^= usbreg::kUepTTog;
-                usbreg::ep1_ctrl() = (usbreg::ep1_ctrl() & 0xFCu) | kInNak;
+                usbreg::ep1_ctrl() = (usbreg::ep1_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResNak;
                 break;
 
             case kTokenOut | 0:
@@ -351,7 +342,7 @@ void Device::irq_handler()
                 break;
 
             case kTokenIn | 0:
-                usbreg::ep0_ctrl() = (usbreg::ep0_ctrl() & 0xFCu) | kInNak;
+                usbreg::ep0_ctrl() = (usbreg::ep0_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResNak;
                 handle_ep0_in();
                 break;
 
@@ -479,7 +470,7 @@ std::size_t Device::read_host(void* dst, std::size_t max_length) noexcept
 
     const std::size_t length = m_rx_buffer.read(dst, max_length);
 
-    CriticalSection guard;
+    CriticalSection   guard;
     if (m_rx_buffer.size() < (kUsbBufferSize - kPacketSize))
     {
         usbreg::ep2_ctrl() = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepRRes) | usbreg::kUepRResAck;

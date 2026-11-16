@@ -19,6 +19,8 @@ class Uart
     static constexpr std::uint32_t kBaudRate     = 115200;
     static constexpr std::size_t   kRxBufferSize = 512;
 
+    static Uart&                   instance() noexcept;
+
     void                           init(std::uint32_t baud = kBaudRate) noexcept;
     void                           deinit() noexcept;
     void                           configure(const LineCoding& coding) noexcept;

@@ -22,18 +22,12 @@ inline constexpr std::uint8_t kCmdIspWrite       = 0x11;
 inline constexpr std::uint8_t kCmdIspVerify      = 0x12;
 inline constexpr std::uint8_t kCmdIspFinish      = 0x13;
 
-// Raw ISP passthrough: the PC drives the WCH bootloader protocol directly.
-inline constexpr std::uint8_t kCmdIspOpen        = 0x14;
-inline constexpr std::uint8_t kCmdIspRaw         = 0x15;
-inline constexpr std::uint8_t kCmdIspClose       = 0x16;
-
 inline constexpr std::uint8_t kStatusOk          = 0x00;
 inline constexpr std::uint8_t kStatusBadCmd      = 0x01;
 inline constexpr std::uint8_t kStatusBadArg      = 0x02;
 inline constexpr std::uint8_t kStatusNoTarget    = 0x03;
 inline constexpr std::uint8_t kStatusUsb         = 0x04;
 inline constexpr std::uint8_t kStatusIsp         = 0x05;
-inline constexpr std::uint8_t kStatusBusy        = 0x06;
 inline constexpr std::uint8_t kStatusUnsupported = 0x07;
 
 inline constexpr std::uint8_t kModeIdle          = 0;
@@ -61,44 +55,50 @@ class App
     void poll() noexcept;
 
   private:
-    void               process_input() noexcept;
-    void               feed(std::uint8_t byte) noexcept;
-    void               process_frame() noexcept;
-    void               reset_parser() noexcept;
+    void                process_input() noexcept;
+    void                feed(std::uint8_t byte) noexcept;
+    void                process_frame() noexcept;
+    void                reset_parser() noexcept;
 
-    void               send_response(std::uint8_t command, const void* payload, std::uint8_t length) noexcept;
-    void               send_status(std::uint8_t command, std::uint8_t status) noexcept;
+    void                send_response(std::uint8_t command, const void* payload, std::uint8_t length) noexcept;
+    void                send_status(std::uint8_t command, std::uint8_t status) noexcept;
 
-    std::uint8_t       enter_master() noexcept;
-    std::uint8_t       enter_slave(std::uint32_t baud) noexcept;
-    std::uint8_t       enter_isp_host() noexcept;
-    void               stop_bridge() noexcept;
-    void               bridge_poll() noexcept;
-    void               handle_coding_change() noexcept;
-    serial::LineCoding pc_line_coding() const noexcept;
-    std::uint8_t       target_kind() const noexcept;
+    std::uint8_t        enter_master() noexcept;
+    std::uint8_t        enter_slave(std::uint32_t baud) noexcept;
+    std::uint8_t        enter_isp_host() noexcept;
+    std::uint8_t        attach(bool expect_isp) noexcept;
+    std::uint8_t        begin_isp(std::uint32_t image_size, isp::Isp::Info& info) noexcept;
+    void                reset_session() noexcept;
+    void                stop_bridge() noexcept;
+    void                bridge_poll() noexcept;
+    void                handle_coding_change() noexcept;
+    serial::LineCoding  pc_line_coding() const noexcept;
+    void                write_vid_pid(std::uint8_t* dst) const noexcept;
+    std::uint8_t        target_kind() const noexcept;
 
-    usb::Device&       m_usb;
-    usbhost::Host&     m_host;
-    serial::Uart&      m_uart;
-    isp::Isp&          m_isp;
+    static std::uint8_t status_from(usbhost::Result result) noexcept;
 
-    RingBuffer<512>    m_tx;
+    usb::Device&        m_usb;
+    usbhost::Host&      m_host;
+    serial::Uart&       m_uart;
+    isp::Isp&           m_isp;
 
-    std::uint8_t       m_mode = kModeIdle;
+    RingBuffer<512>     m_tx;
 
-    std::uint8_t       m_frame[96]{};
-    std::size_t        m_frame_length = 0;
+    std::uint8_t        m_mode = kModeIdle;
 
-    std::uint8_t       m_bulk_in      = 0;
-    std::uint8_t       m_bulk_out     = 0;
-    std::uint8_t       m_cdc_itf      = 0;
+    std::uint8_t        m_frame[72]{};
+    std::size_t         m_frame_length = 0;
 
-    std::uint8_t       m_pending[64]{};
-    std::uint8_t       m_pending_length         = 0;
+    std::uint8_t        m_bulk_in      = 0;
+    std::uint8_t        m_bulk_out     = 0;
+    std::uint8_t        m_cdc_itf      = 0;
 
-    std::uint32_t      m_seen_coding_generation = 0;
-    std::uint8_t       m_seen_control_state     = 0;
+    std::uint8_t        m_pending[64]{};
+    std::uint8_t        m_pending_length         = 0;
+
+    std::uint32_t       m_seen_coding_generation = 0;
+    std::uint8_t        m_seen_control_state     = 0;
 };
 
 } // namespace ch582::app

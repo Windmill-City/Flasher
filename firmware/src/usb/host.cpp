@@ -28,25 +28,6 @@ inline void delay_ms(std::uint32_t ms) noexcept
     systick::delay(ms * clock::kTicksPerMs);
 }
 
-Result map_xfer(Xfer x)
-{
-    switch (x)
-    {
-    case Xfer::ok:
-        return Result::ok;
-    case Xfer::nak:
-        return Result::nak;
-    case Xfer::stall:
-        return Result::stall;
-    case Xfer::timeout:
-        return Result::timeout;
-    case Xfer::disconnected:
-        return Result::disconnected;
-    default:
-        return Result::error;
-    }
-}
-
 } // namespace
 
 void Host::vbus(bool on) noexcept
@@ -62,7 +43,7 @@ void Host::vbus(bool on) noexcept
     }
 }
 
-void Host::pins_as_gpio(bool dplus_high) noexcept
+void Host::release_pins(bool pull_down) noexcept
 {
     usb2reg::int_en()    = 0;
     usb2reg::host_ctrl() = 0;
@@ -71,12 +52,23 @@ void Host::pins_as_gpio(bool dplus_high) noexcept
     sysreg::pin_analog_ie() &= static_cast<std::uint16_t>(~(sysreg::kPinUsb2Ie | sysreg::kPinUsb2DpPu));
     sysreg::pin_alternate() &= static_cast<std::uint16_t>(~sysreg::kPinUart1);
 
-    // D- is only weakly pulled low so it cannot fight the Dongle's UART TX
-    // if the target runs its application instead of the ISP bootloader.
     gpio::pb::pu() &= ~(gpio::kPin12 | gpio::kPin13);
-    gpio::pb::pd_drv() |= (gpio::kPin12 | gpio::kPin13);
     gpio::pb::dir() &= ~(gpio::kPin12 | gpio::kPin13);
+    if (pull_down)
+    {
+        // D- is only weakly pulled low so it cannot fight the Dongle's UART TX
+        // if the target runs its application instead of the ISP bootloader.
+        gpio::pb::pd_drv() |= (gpio::kPin12 | gpio::kPin13);
+    }
+    else
+    {
+        gpio::pb::pd_drv() &= ~(gpio::kPin12 | gpio::kPin13);
+    }
+}
 
+void Host::pins_as_gpio(bool dplus_high) noexcept
+{
+    release_pins(dplus_high);
     if (dplus_high)
     {
         // The bootloader samples D+ at power-on; drive it firmly high.
@@ -123,15 +115,7 @@ void Host::init() noexcept
 
 void Host::disable() noexcept
 {
-    usb2reg::int_en()    = 0;
-    usb2reg::host_ctrl() = 0;
-    usb2reg::ctrl()      = 0;
-
-    sysreg::pin_analog_ie() &= static_cast<std::uint16_t>(~(sysreg::kPinUsb2Ie | sysreg::kPinUsb2DpPu));
-    gpio::pb::dir() &= ~(gpio::kPin12 | gpio::kPin13);
-    gpio::pb::pu() &= ~(gpio::kPin12 | gpio::kPin13);
-    gpio::pb::pd_drv() &= ~(gpio::kPin12 | gpio::kPin13);
-
+    release_pins(false);
     m_info = DeviceInfo{};
 }
 
@@ -170,7 +154,7 @@ void Host::power_cycle_master() noexcept
     delay_ms(120);
 }
 
-void Host::power_cycle_app() noexcept
+void Host::power_cycle_floating(std::uint32_t hold_ms) noexcept
 {
     power_off();
 
@@ -178,14 +162,17 @@ void Host::power_cycle_app() noexcept
     // role sample high, so the freshly flashed application starts as a slave
     // and can be reached through the USB-A UART bridge.
     vbus(true);
-    delay_ms(30);
+    delay_ms(hold_ms);
+}
+
+void Host::power_cycle_app() noexcept
+{
+    power_cycle_floating(30);
 }
 
 void Host::power_cycle_slave() noexcept
 {
-    power_off();
-    vbus(true);
-    delay_ms(80);
+    power_cycle_floating(80);
 }
 
 bool Host::attached() const noexcept
@@ -205,7 +192,7 @@ void Host::bus_reset() noexcept
     usb2reg::int_fg() = usb2reg::kUifDetect;
 }
 
-Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeout_us) noexcept
+Result Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeout_us) noexcept
 {
     usb2reg::host_rx_ctrl()      = tog;
     usb2reg::host_tx_ctrl()      = tog;
@@ -226,7 +213,7 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
                 if (!attached())
                 {
                     usb2reg::host_ep_pid() = 0;
-                    return Xfer::disconnected;
+                    return Result::disconnected;
                 }
             }
             if (systick::expired(deadline))
@@ -243,7 +230,7 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
                 }
                 if ((usb2reg::int_fg() & usb2reg::kUifTransfer) == 0)
                 {
-                    return Xfer::timeout;
+                    return Result::timeout;
                 }
 
                 break;
@@ -257,26 +244,26 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
             usb2reg::int_fg() = usb2reg::kUifDetect;
             if (!attached())
             {
-                return Xfer::disconnected;
+                return Result::disconnected;
             }
         }
 
         const std::uint8_t status = usb2reg::int_st();
         if ((status & usb2reg::kUisToggleOk) != 0)
         {
-            return Xfer::ok;
+            return Result::ok;
         }
 
         const std::uint8_t response = status & usb2reg::kMaskUisHRes;
         if (response == kPidStall)
         {
-            return Xfer::stall;
+            return Result::stall;
         }
         if (response == kPidNak)
         {
             if (systick::expired(deadline))
             {
-                return Xfer::nak;
+                return Result::nak;
             }
             delay_us(20);
             continue;
@@ -290,45 +277,44 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
                 // Data toggle mismatch: discard and retry.
                 if (systick::expired(deadline))
                 {
-                    return Xfer::timeout;
+                    return Result::timeout;
                 }
                 delay_us(20);
                 continue;
             }
             if (response != 0)
             {
-                return Xfer::error;
+                return Result::error;
             }
         }
         else
         {
             if (response == kPidAck)
             {
-                return Xfer::ok;
+                return Result::ok;
             }
             if (response != 0)
             {
-                return Xfer::error;
+                return Result::error;
             }
         }
 
         if (systick::expired(deadline))
         {
-            return Xfer::timeout;
+            return Result::timeout;
         }
         delay_us(20);
     }
 }
 
-Result Host::control_transfer(std::uint8_t   request_type,
-                              std::uint8_t   request,
-                              std::uint16_t  value,
-                              std::uint16_t  index,
-                              const void*    out,
-                              std::uint16_t  out_length,
-                              void*          in,
-                              std::uint16_t  in_length,
-                              std::uint16_t* actual) noexcept
+Result Host::control_transfer(std::uint8_t  request_type,
+                              std::uint8_t  request,
+                              std::uint16_t value,
+                              std::uint16_t index,
+                              const void*   out,
+                              std::uint16_t out_length,
+                              void*         in,
+                              std::uint16_t in_length) noexcept
 {
     m_tx[0]                          = request_type;
     m_tx[1]                          = request;
@@ -341,16 +327,14 @@ Result Host::control_transfer(std::uint8_t   request_type,
     m_tx[7]                          = static_cast<std::uint8_t>(setup_length >> 8);
 
     usb2reg::host_tx_len()           = 8;
-    Xfer x                           = transact(static_cast<std::uint8_t>((kPidSetup << 4) | 0), 0, 200000);
-    if (x != Xfer::ok)
+    Result x                         = transact(static_cast<std::uint8_t>((kPidSetup << 4) | 0), 0, 200000);
+    if (x != Result::ok)
     {
-        return map_xfer(x);
+        return x;
     }
 
-    usb2reg::host_rx_ctrl()   = static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog | usb2reg::kUepAutoTog);
-    usb2reg::host_tx_ctrl()   = usb2reg::host_rx_ctrl();
-
-    std::uint16_t transferred = 0;
+    usb2reg::host_rx_ctrl() = static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog | usb2reg::kUepAutoTog);
+    usb2reg::host_tx_ctrl() = usb2reg::host_rx_ctrl();
 
     if (in != nullptr && in_length != 0)
     {
@@ -360,9 +344,9 @@ Result Host::control_transfer(std::uint8_t   request_type,
         while (remaining != 0)
         {
             x = transact(static_cast<std::uint8_t>((kPidIn << 4) | 0), usb2reg::host_rx_ctrl(), 200000);
-            if (x != Xfer::ok)
+            if (x != Result::ok)
             {
-                return map_xfer(x);
+                return x;
             }
 
             const std::uint8_t received = usb2reg::rx_len();
@@ -373,7 +357,6 @@ Result Host::control_transfer(std::uint8_t   request_type,
             const std::uint16_t copy = received < remaining ? received : remaining;
             std::memcpy(dst, m_rx, copy);
             dst += copy;
-            transferred += copy;
             remaining -= copy;
 
             if (received < m_ep0_size)
@@ -384,11 +367,11 @@ Result Host::control_transfer(std::uint8_t   request_type,
 
         usb2reg::host_tx_len() = 0;
         x                      = transact(static_cast<std::uint8_t>((kPidOut << 4) | 0),
-                                          static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
-                                          200000);
-        if (x != Xfer::ok)
+                     static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
+                     200000);
+        if (x != Result::ok)
         {
-            return map_xfer(x);
+            return x;
         }
     }
     else if (out != nullptr && out_length != 0)
@@ -403,40 +386,34 @@ Result Host::control_transfer(std::uint8_t   request_type,
             usb2reg::host_tx_len() = static_cast<std::uint8_t>(chunk);
 
             x = transact(static_cast<std::uint8_t>((kPidOut << 4) | 0), usb2reg::host_tx_ctrl(), 200000);
-            if (x != Xfer::ok)
+            if (x != Result::ok)
             {
-                return map_xfer(x);
+                return x;
             }
 
             src += chunk;
-            transferred += chunk;
             remaining -= chunk;
         }
 
         usb2reg::host_tx_len() = 1;
         x                      = transact(static_cast<std::uint8_t>((kPidIn << 4) | 0),
-                                          static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
-                                          200000);
-        if (x != Xfer::ok)
+                     static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
+                     200000);
+        if (x != Result::ok)
         {
-            return map_xfer(x);
+            return x;
         }
     }
     else
     {
         usb2reg::host_tx_len() = 1;
         x                      = transact(static_cast<std::uint8_t>((kPidIn << 4) | 0),
-                                          static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
-                                          200000);
-        if (x != Xfer::ok)
+                     static_cast<std::uint8_t>(usb2reg::kUepRTog | usb2reg::kUepTTog),
+                     200000);
+        if (x != Result::ok)
         {
-            return map_xfer(x);
+            return x;
         }
-    }
-
-    if (actual != nullptr)
-    {
-        *actual = transferred;
     }
 
     // The bulk endpoint toggle state lives in m_rx_ctrl/m_tx_ctrl. Leave it
@@ -474,14 +451,12 @@ void Host::parse_config(const std::uint8_t* config, std::uint16_t length) noexce
     m_info.bulk_out     = 0;
     m_info.has_cdc      = false;
     m_info.cdc_comm_itf = 0;
-    m_info.cdc_data_itf = 0;
 
     if (length >= 9)
     {
         m_info.config_value = config[5] != 0 ? config[5] : 1;
     }
 
-    std::uint8_t interface_number = 0;
     for (std::uint16_t i = 0; i + 1 < length;)
     {
         const std::uint8_t descriptor_length = config[i];
@@ -493,17 +468,12 @@ void Host::parse_config(const std::uint8_t* config, std::uint16_t length) noexce
 
         if (descriptor_type == 0x04 && descriptor_length >= 9)
         {
-            interface_number                      = config[i + 2];
             const std::uint8_t interface_class    = config[i + 5];
             const std::uint8_t interface_subclass = config[i + 6];
             if (interface_class == 0x02 && interface_subclass == 0x02)
             {
                 m_info.has_cdc      = true;
-                m_info.cdc_comm_itf = interface_number;
-            }
-            else if (interface_class == 0x0A)
-            {
-                m_info.cdc_data_itf = interface_number;
+                m_info.cdc_comm_itf = config[i + 2];
             }
         }
         else if (descriptor_type == 0x05 && descriptor_length >= 7)
@@ -533,30 +503,34 @@ void Host::parse_config(const std::uint8_t* config, std::uint16_t length) noexce
     }
 }
 
-Result Host::enumerate(DeviceInfo& info, std::uint32_t timeout_ms) noexcept
+bool Host::wait_attached(std::uint32_t timeout_ms) noexcept
 {
     const std::uint32_t deadline = systick::now() + timeout_ms * clock::kTicksPerMs;
     while (!attached())
     {
         if (systick::expired(deadline))
         {
-            return Result::disconnected;
+            return false;
         }
         delay_us(200);
+    }
+    return true;
+}
+
+Result Host::enumerate(DeviceInfo& info, std::uint32_t timeout_ms) noexcept
+{
+    if (!wait_attached(timeout_ms))
+    {
+        return Result::disconnected;
     }
 
     bus_reset();
 
     // Bus reset can make the target detach and re-attach while its USB device
     // stack initializes. Wait for a stable attach before enumerating.
-    const std::uint32_t attach_deadline = systick::now() + 600u * clock::kTicksPerMs;
-    while (!attached())
+    if (!wait_attached(600))
     {
-        if (systick::expired(attach_deadline))
-        {
-            return Result::disconnected;
-        }
-        delay_us(200);
+        return Result::disconnected;
     }
     delay_ms(20);
 
@@ -576,20 +550,17 @@ Result Host::enumerate(DeviceInfo& info, std::uint32_t timeout_ms) noexcept
         return result;
     }
 
-    m_info.vid          = static_cast<std::uint16_t>(m_config[8] | (m_config[9] << 8));
-    m_info.pid          = static_cast<std::uint16_t>(m_config[10] | (m_config[11] << 8));
-    m_info.ep0_size     = m_config[7] != 0 ? m_config[7] : 8;
-    m_info.device_class = m_config[4];
-    m_ep0_size          = m_info.ep0_size;
+    m_info.vid = static_cast<std::uint16_t>(m_config[8] | (m_config[9] << 8));
+    m_info.pid = static_cast<std::uint16_t>(m_config[10] | (m_config[11] << 8));
+    m_ep0_size = m_config[7] != 0 ? m_config[7] : 8;
 
-    result              = set_address(2);
+    result     = set_address(2);
     if (result != Result::ok)
     {
         return result;
     }
 
     usb2reg::dev_addr() = 2;
-    m_info.address      = 2;
     delay_ms(10);
 
     result = get_descriptor(0x02, 0, m_config, 9);
@@ -653,8 +624,8 @@ Result Host::bulk_out(std::uint8_t ep, const void* data, std::uint8_t length, st
     }
     usb2reg::host_tx_len() = length;
 
-    const Xfer x           = transact(static_cast<std::uint8_t>((kPidOut << 4) | (ep & 0x0Fu)), m_tx_ctrl, timeout_us);
-    if (x == Xfer::ok)
+    const Result x         = transact(static_cast<std::uint8_t>((kPidOut << 4) | (ep & 0x0Fu)), m_tx_ctrl, timeout_us);
+    if (x == Result::ok)
     {
         m_tx_ctrl               = static_cast<std::uint8_t>(m_tx_ctrl ^ usb2reg::kUepTTog);
         usb2reg::host_tx_ctrl() = m_tx_ctrl;
@@ -664,13 +635,13 @@ Result Host::bulk_out(std::uint8_t ep, const void* data, std::uint8_t length, st
 
     usb2reg::host_rx_ctrl() = m_rx_ctrl;
     usb2reg::host_tx_ctrl() = m_tx_ctrl;
-    return map_xfer(x);
+    return x;
 }
 
 Result Host::bulk_in(std::uint8_t ep, void* data, std::uint8_t& length, std::uint32_t timeout_us) noexcept
 {
-    const Xfer x = transact(static_cast<std::uint8_t>((kPidIn << 4) | (ep & 0x0Fu)), m_rx_ctrl, timeout_us);
-    if (x == Xfer::ok)
+    const Result x = transact(static_cast<std::uint8_t>((kPidIn << 4) | (ep & 0x0Fu)), m_rx_ctrl, timeout_us);
+    if (x == Result::ok)
     {
         m_rx_ctrl               = usb2reg::host_rx_ctrl();
         usb2reg::host_tx_ctrl() = m_tx_ctrl;
@@ -690,7 +661,7 @@ Result Host::bulk_in(std::uint8_t ep, void* data, std::uint8_t& length, std::uin
     length                  = 0;
     usb2reg::host_rx_ctrl() = m_rx_ctrl;
     usb2reg::host_tx_ctrl() = m_tx_ctrl;
-    return map_xfer(x);
+    return x;
 }
 
 } // namespace ch582::usbhost

@@ -2,21 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace ch582
 {
-
-// Portable byte copy. CH582 (QingKe V4A, RV32IMAC) does not implement the
-// CH57x-only `mcpy` vendor instruction, so the ring buffer must not use it.
-inline void copy_bytes(void* dst, const void* src, std::size_t length) noexcept
-{
-    auto*       d = static_cast<std::uint8_t*>(dst);
-    const auto* s = static_cast<const std::uint8_t*>(src);
-    for (std::size_t i = 0; i < length; ++i)
-    {
-        d[i] = s[i];
-    }
-}
 
 // Single-producer, single-consumer lock-free ring. The extra slot separates
 // the full and empty states.
@@ -43,11 +32,6 @@ class RingBuffer
         return m_read == m_write;
     }
 
-    bool full() const noexcept
-    {
-        return next(m_write) == m_read;
-    }
-
     void clear() noexcept
     {
         m_read  = 0;
@@ -69,7 +53,7 @@ class RingBuffer
         const std::size_t first = kSlots - head;
         if (length <= first)
         {
-            copy_bytes(&m_pool[head], src, length);
+            std::memcpy(&m_pool[head], src, length);
             head += length;
             if (head == kSlots)
             {
@@ -78,8 +62,8 @@ class RingBuffer
         }
         else
         {
-            copy_bytes(&m_pool[head], src, first);
-            copy_bytes(&m_pool[0], static_cast<const std::uint8_t*>(src) + first, length - first);
+            std::memcpy(&m_pool[head], src, first);
+            std::memcpy(&m_pool[0], static_cast<const std::uint8_t*>(src) + first, length - first);
             head = length - first;
         }
 
@@ -108,7 +92,7 @@ class RingBuffer
         const std::size_t first = kSlots - tail;
         if (length <= first)
         {
-            copy_bytes(dst, &m_pool[tail], length);
+            std::memcpy(dst, &m_pool[tail], length);
             tail += length;
             if (tail == kSlots)
             {
@@ -117,8 +101,8 @@ class RingBuffer
         }
         else
         {
-            copy_bytes(dst, &m_pool[tail], first);
-            copy_bytes(static_cast<std::uint8_t*>(dst) + first, &m_pool[0], length - first);
+            std::memcpy(dst, &m_pool[tail], first);
+            std::memcpy(static_cast<std::uint8_t*>(dst) + first, &m_pool[0], length - first);
             tail = length - first;
         }
 
@@ -129,14 +113,9 @@ class RingBuffer
   private:
     static constexpr std::size_t kSlots = N + 1;
 
-    static constexpr std::size_t next(std::size_t index) noexcept
-    {
-        return index + 1 == kSlots ? 0 : index + 1;
-    }
-
-    std::uint8_t         m_pool[kSlots]{};
-    volatile std::size_t m_write = 0;
-    volatile std::size_t m_read  = 0;
+    std::uint8_t                 m_pool[kSlots]{};
+    volatile std::size_t         m_write = 0;
+    volatile std::size_t         m_read  = 0;
 };
 
 } // namespace ch582

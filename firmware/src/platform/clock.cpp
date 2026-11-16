@@ -55,7 +55,7 @@ CH582_HIGH_CODE void init() noexcept
     {
         sysreg::SafeAccess access;
         sysreg::clock_sys_cfg() = static_cast<std::uint16_t>((1u << 6) | kPll);
-        sysreg::flash_cfg()     = (kPll == 8u) ? 0x52 : 0x02;
+        sysreg::flash_cfg()     = 0x02;
         sysreg::pll_config() |= 0x80;
     }
 

@@ -41,26 +41,6 @@ CMD_ISP_BEGIN = 0x10
 CMD_ISP_WRITE = 0x11
 CMD_ISP_VERIFY = 0x12
 CMD_ISP_FINISH = 0x13
-CMD_ISP_OPEN = 0x14
-CMD_ISP_RAW = 0x15
-CMD_ISP_CLOSE = 0x16
-
-ISP_IDENTIFY = 0xA1
-ISP_END = 0xA2
-ISP_KEY = 0xA3
-ISP_ERASE = 0xA4
-ISP_PROGRAM = 0xA5
-ISP_VERIFY = 0xA6
-ISP_READ_CONFIG = 0xA7
-ISP_WRITE_CONFIG = 0xA8
-
-CFG_DEBUG_EN = 1 << 4
-
-# CH570/CH572 keep the code-flash protection marker in the first config word.
-# An erased marker (0xFF) makes the bootloader reject every PROGRAM with 0xFE.
-CFG_CODE_UNLOCK = 0xA5
-CHIP_CH570 = 0x70
-CHIP_CH572 = 0x72
 
 MODE_IDLE = 0
 MODE_MASTER = 1
@@ -174,27 +154,22 @@ class Flasher:
         payload = bytes((mode,)) + baud.to_bytes(4, "little")
         return self.request(CMD_SET_MODE, payload, timeout=5.0)
 
-    def isp_open(self) -> bytes:
-        try:
-            return self.request(CMD_ISP_OPEN, timeout=10.0)
-        except TimeoutError:
-            # Safe to retry: the Flasher aborts the old session and power
-            # cycles the target into the bootloader again.
-            self.break_to_command()
-            return self.request(CMD_ISP_OPEN, timeout=15.0)
-
-    def isp_close(self) -> bytes:
-        return self.request(CMD_ISP_CLOSE, timeout=10.0)
-
-    def flash(self, image: bytes, verify: bool, debug: bool = False) -> None:
+    def flash(self, image: bytes, verify: bool) -> None:
         if len(image) > 240 * 1024:
             raise RuntimeError("image is larger than the CH572 240 KiB code flash")
         if len(image) % 1024:
             image += b"\xff" * (1024 - len(image) % 1024)
 
-        self.prepare_target(debug)
-
-        info = self.request(CMD_ISP_BEGIN, len(image).to_bytes(4, "little"), timeout=30)
+        # The Flasher attaches to the bootloader, unlocks the target if needed
+        # (CH570/CH572 code-flash marker or CFG_DEBUG_EN) and erases in one
+        # command.
+        try:
+            info = self.request(CMD_ISP_BEGIN, len(image).to_bytes(4, "little"), timeout=30)
+        except TimeoutError:
+            # Safe to retry: BEGIN aborts the old session and power cycles the
+            # target into the bootloader again.
+            self.break_to_command()
+            info = self.request(CMD_ISP_BEGIN, len(image).to_bytes(4, "little"), timeout=30)
         chip_id = info[1]
         device_type = info[2]
         uid = info[3:11].hex()
@@ -203,19 +178,20 @@ class Flasher:
 
         try:
             offset = 0
-            chunks: list[tuple[int, bytes]] = []
             while offset < len(image):
                 chunk = image[offset:offset + 56]
                 self.request(CMD_ISP_WRITE, offset.to_bytes(4, "little") + chunk)
-                chunks.append((offset, chunk))
                 offset += len(chunk)
                 print(f"\rwrite {offset}/{len(image)}", end="", flush=True)
             print()
 
             if verify:
-                for index, (address, chunk) in enumerate(chunks):
-                    self.request(CMD_ISP_VERIFY, address.to_bytes(4, "little") + chunk, timeout=10)
-                    print(f"\rverify {index + 1}/{len(chunks)}", end="", flush=True)
+                offset = 0
+                while offset < len(image):
+                    chunk = image[offset:offset + 56]
+                    self.request(CMD_ISP_VERIFY, offset.to_bytes(4, "little") + chunk, timeout=10)
+                    offset += len(chunk)
+                    print(f"\rverify {offset}/{len(image)}", end="", flush=True)
                 print()
 
             self.request(CMD_ISP_FINISH, timeout=10)
@@ -227,130 +203,6 @@ class Flasher:
             raise
         print("done")
 
-    def prepare_target(self, debug: bool = False) -> None:
-        """Put the target in a state that accepts code-flash writes.
-
-        CH570/CH572 store a code-flash protection marker in the first config
-        word. An erased marker (0xFF) makes the bootloader answer every PROGRAM
-        with "A5 ... FE", so write the 0xA5/0x5A unlock value and reboot.
-
-        CH58x instead blocks writes while CFG_DEBUG_EN is set; a chip with
-        debug enabled answers PROGRAM with "A5 ... FE 00" and every VERIFY with
-        "FE 00". WCHISPStudio clears the bit before programming.
-        """
-        self.isp_open()
-        session = IspSession(self, debug)
-        session.identify()
-
-        if session.chip_id in (CHIP_CH570, CHIP_CH572):
-            if session.config[0] == CFG_CODE_UNLOCK:
-                return
-
-            session.send_key()
-            fixed = bytearray(session.config)
-            fixed[0] = CFG_CODE_UNLOCK
-            fixed[1] = 0x5A
-            print(f"CFG {session.config.hex()}: enabling code flash access")
-            session.write_config(bytes(fixed))
-            session.reboot()
-            time.sleep(0.2)
-
-            self.isp_open()
-            session = IspSession(self, debug)
-            session.identify()
-            if session.config[0] != CFG_CODE_UNLOCK:
-                raise RuntimeError(f"failed to unlock code flash (CFG={session.config.hex()})")
-            print(f"CFG now {session.config.hex()}")
-            return
-
-        if not (session.user_cfg & CFG_DEBUG_EN):
-            return
-
-        fixed = bytearray(session.config)
-        fixed[8:12] = (session.user_cfg & ~CFG_DEBUG_EN).to_bytes(4, "little")
-        print(f"USER_CFG {session.user_cfg:#010x}: clearing CFG_DEBUG_EN")
-        session.write_config(bytes(fixed))
-        session.reboot()
-        time.sleep(0.2)
-
-        self.isp_open()
-        session = IspSession(self, debug)
-        session.identify()
-        if session.user_cfg & CFG_DEBUG_EN:
-            raise RuntimeError(f"failed to clear CFG_DEBUG_EN (USER_CFG={session.user_cfg:#010x})")
-        print(f"USER_CFG now {session.user_cfg:#010x}")
-
-
-class IspSession:
-    """Raw WCH bootloader access through the Flasher passthrough (diagnostics)."""
-
-    def __init__(self, flasher: Flasher, debug: bool = False):
-        self.flasher = flasher
-        self.debug = debug
-        self.chip_id = 0
-        self.device_type = 0
-        self.uid = bytes(8)
-        self.config = bytes(12)
-        self.user_cfg = 0
-        self.key = bytes(8)
-        self.key_sum = 0
-
-    def transfer(self, frame: bytes, timeout: float = 6.0) -> bytes:
-        if len(frame) > 63:
-            raise ValueError("ISP command longer than 63 bytes")
-        response = self.flasher.request(
-            CMD_ISP_RAW, frame, timeout=timeout, accepted_status=(0, 4)
-        )
-        if response[0] != 0:
-            raise RuntimeError("target did not answer")
-        raw = response[1:]
-        if self.debug:
-            print(f"\n  -> {frame.hex()}\n  <- {raw.hex()}")
-        if not raw or raw[0] != frame[0]:
-            raise RuntimeError(f"unexpected ISP response {raw.hex()}")
-        return raw
-
-    def identify(self) -> None:
-        frame = bytes((ISP_IDENTIFY, 0x12, 0x00, 0x00, 0x00)) + b"MCU ISP & WCH.CN"
-        raw = self.transfer(frame)
-        if len(raw) < 6:
-            raise RuntimeError(f"short identify response {raw.hex()}")
-        self.chip_id = raw[4]
-        self.device_type = raw[5]
-
-        config = self.transfer(bytes((ISP_READ_CONFIG, 0x02, 0x00, 0x1F, 0x00)))
-        if len(config) < 30:
-            raise RuntimeError(f"short read-config response {config.hex()}")
-        self.config = config[4 + 2:4 + 14]
-        self.user_cfg = int.from_bytes(self.config[8:12], "little")
-        self.uid = config[4 + 18:4 + 26]
-
-        total = sum(self.uid) & 0xFF
-        self.key = bytes([total] * 7 + [(total + self.chip_id) & 0xFF])
-        self.key_sum = sum(self.key) & 0xFF
-
-        if self.debug:
-            print(f"  chip={self.chip_id:#04x} type={self.device_type:#04x} "
-                  f"uid={self.uid.hex()} config={self.config.hex()} "
-                  f"user_cfg={self.user_cfg:#010x}")
-
-    def send_key(self) -> None:
-        """Arm the XOR key the bootloader derives from the UID."""
-        raw = self.transfer(bytes((ISP_KEY, 0x1E, 0x00)) + bytes(30))
-        if len(raw) < 5 or raw[4] != self.key_sum:
-            raise RuntimeError(f"ISP key rejected (expected checksum {self.key_sum:#04x})")
-
-    def write_config(self, config: bytes) -> None:
-        if len(config) != 12:
-            raise ValueError("config write needs the 12 raw config bytes")
-        frame = bytes((ISP_WRITE_CONFIG, 2 + len(config), 0x00, 0x07, 0x00)) + config
-        self.transfer(frame, timeout=10.0)
-
-    def reboot(self) -> None:
-        try:
-            self.transfer(bytes((ISP_END, 0x01, 0x00, 0x01)), timeout=2.0)
-        except Exception:
-            pass
 
 
 def monitor(ser: serial.Serial) -> None:
@@ -406,7 +258,6 @@ def main() -> None:
     flash = sub.add_parser("flash")
     flash.add_argument("image")
     flash.add_argument("--verify", action="store_true")
-    flash.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
     port = find_port(args.port)
@@ -452,7 +303,7 @@ def main() -> None:
         elif args.action == "flash":
             with open(args.image, "rb") as handle:
                 image = handle.read()
-            flasher.flash(image, args.verify, args.debug)
+            flasher.flash(image, args.verify)
 
     finally:
         flasher.close()

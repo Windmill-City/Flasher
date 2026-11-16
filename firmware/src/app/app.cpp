@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "ch582/platform/clock.hpp"
+#include "ch582/util/bytes.hpp"
 
 namespace ch582::app
 {
@@ -27,20 +28,6 @@ std::uint8_t           crc8(const std::uint8_t* data, std::size_t length) noexce
         }
     }
     return crc;
-}
-
-std::uint32_t read_u32(const std::uint8_t* data) noexcept
-{
-    return static_cast<std::uint32_t>(data[0]) | (static_cast<std::uint32_t>(data[1]) << 8)
-         | (static_cast<std::uint32_t>(data[2]) << 16) | (static_cast<std::uint32_t>(data[3]) << 24);
-}
-
-void write_u32(std::uint8_t* data, std::uint32_t value) noexcept
-{
-    data[0] = static_cast<std::uint8_t>(value & 0xFFu);
-    data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFFu);
-    data[2] = static_cast<std::uint8_t>((value >> 16) & 0xFFu);
-    data[3] = static_cast<std::uint8_t>((value >> 24) & 0xFFu);
 }
 
 } // namespace
@@ -137,7 +124,7 @@ void App::send_response(std::uint8_t command, const void* payload, std::uint8_t 
         return;
     }
 
-    std::uint8_t frame[80];
+    std::uint8_t frame[72];
     frame[0] = kResponseMagic0;
     frame[1] = kResponseMagic1;
     frame[2] = command;
@@ -173,17 +160,13 @@ void App::process_frame() noexcept
     case kCmdPing:
     case kCmdInfo:
     {
-        const auto&  info = m_host.info();
         std::uint8_t response[9];
         response[0] = kStatusOk;
         response[1] = 1; // protocol major
         response[2] = 1; // protocol minor
         response[3] = m_mode;
         response[4] = target_kind();
-        response[5] = static_cast<std::uint8_t>(info.vid & 0xFFu);
-        response[6] = static_cast<std::uint8_t>(info.vid >> 8);
-        response[7] = static_cast<std::uint8_t>(info.pid & 0xFFu);
-        response[8] = static_cast<std::uint8_t>(info.pid >> 8);
+        write_vid_pid(&response[5]);
         send_response(command, response, sizeof(response));
         break;
     }
@@ -199,7 +182,7 @@ void App::process_frame() noexcept
         const std::uint8_t mode = payload[0];
         if (mode == kModeIdle)
         {
-            stop_bridge();
+            reset_session();
             send_status(command, kStatusOk);
         }
         else if (mode == kModeMaster)
@@ -211,15 +194,11 @@ void App::process_frame() noexcept
                 break;
             }
 
-            const auto&  info = m_host.info();
             std::uint8_t response[7];
             response[0] = kStatusOk;
             response[1] = m_mode;
             response[2] = target_kind();
-            response[3] = static_cast<std::uint8_t>(info.vid & 0xFFu);
-            response[4] = static_cast<std::uint8_t>(info.vid >> 8);
-            response[5] = static_cast<std::uint8_t>(info.pid & 0xFFu);
-            response[6] = static_cast<std::uint8_t>(info.pid >> 8);
+            write_vid_pid(&response[3]);
             send_response(command, response, sizeof(response));
         }
         else if (mode == kModeSlave)
@@ -255,8 +234,7 @@ void App::process_frame() noexcept
             break;
         }
 
-        m_isp.abort();
-        stop_bridge();
+        reset_session();
 
         if (payload[0] == 0)
         {
@@ -283,17 +261,11 @@ void App::process_frame() noexcept
             break;
         }
 
-        const std::uint8_t status = enter_isp_host();
+        isp::Isp::Info     info;
+        const std::uint8_t status = begin_isp(read_u32(payload), info);
         if (status != kStatusOk)
         {
             send_status(command, status);
-            break;
-        }
-
-        isp::Isp::Info info;
-        if (!m_isp.begin(read_u32(payload), info))
-        {
-            send_status(command, kStatusIsp);
             break;
         }
 
@@ -354,94 +326,52 @@ void App::process_frame() noexcept
         break;
     }
 
-    case kCmdIspOpen:
-    {
-        const std::uint8_t status = enter_isp_host();
-        if (status != kStatusOk)
-        {
-            send_status(command, status);
-            break;
-        }
-
-        const auto&  info = m_host.info();
-        std::uint8_t response[5];
-        response[0] = kStatusOk;
-        response[1] = static_cast<std::uint8_t>(info.vid & 0xFFu);
-        response[2] = static_cast<std::uint8_t>(info.vid >> 8);
-        response[3] = static_cast<std::uint8_t>(info.pid & 0xFFu);
-        response[4] = static_cast<std::uint8_t>(info.pid >> 8);
-        send_response(command, response, sizeof(response));
-        break;
-    }
-
-    case kCmdIspRaw:
-    {
-        if (!m_host.attached() || !m_host.is_isp_device())
-        {
-            send_status(command, kStatusNoTarget);
-            break;
-        }
-        if (payload_length == 0 || payload_length > 63)
-        {
-            send_status(command, kStatusBadArg);
-            break;
-        }
-
-        const auto send = m_host.bulk_out(m_host.info().bulk_out, payload, payload_length, 500000);
-        if (send != usbhost::Result::ok)
-        {
-            send_status(command, kStatusUsb);
-            break;
-        }
-
-        std::uint8_t in_data[64];
-        std::uint8_t in_length = 0;
-        const auto   received  = m_host.bulk_in(m_host.info().bulk_in, in_data, in_length, 5000000);
-
-        std::uint8_t response[64];
-        response[0]         = (received == usbhost::Result::ok) ? kStatusOk : kStatusUsb;
-        std::uint8_t length = 0;
-        if (received == usbhost::Result::ok)
-        {
-            length = in_length > 63 ? 63 : in_length;
-            std::memcpy(&response[1], in_data, length);
-        }
-        send_response(command, response, static_cast<std::uint8_t>(1 + length));
-        break;
-    }
-
-    case kCmdIspClose:
-    {
-        m_isp.abort();
-        stop_bridge();
-        m_host.power_cycle_app();
-        m_mode = kModeIdle;
-        send_status(command, kStatusOk);
-        break;
-    }
-
     default:
         send_status(command, kStatusBadCmd);
         break;
     }
 }
 
-std::uint8_t App::enter_isp_host() noexcept
+std::uint8_t App::status_from(usbhost::Result result) noexcept
+{
+    if (result == usbhost::Result::ok)
+    {
+        return kStatusOk;
+    }
+    if (result == usbhost::Result::disconnected || result == usbhost::Result::timeout)
+    {
+        return kStatusNoTarget;
+    }
+    return kStatusUsb;
+}
+
+void App::reset_session() noexcept
 {
     m_isp.abort();
     stop_bridge();
+}
 
-    m_host.power_cycle_isp();
+std::uint8_t App::attach(bool expect_isp) noexcept
+{
+    reset_session();
+
+    if (expect_isp)
+    {
+        m_host.power_cycle_isp();
+    }
+    else
+    {
+        m_host.power_cycle_master();
+    }
 
     usbhost::DeviceInfo info;
     const auto          result = m_host.enumerate(info, 1200);
     if (result != usbhost::Result::ok)
     {
-        return (result == usbhost::Result::disconnected || result == usbhost::Result::timeout) ? kStatusNoTarget
-                                                                                               : kStatusUsb;
+        return status_from(result);
     }
 
-    if (!m_host.is_isp_device())
+    if (m_host.is_isp_device() != expect_isp)
     {
         return kStatusNoTarget;
     }
@@ -449,26 +379,64 @@ std::uint8_t App::enter_isp_host() noexcept
     return kStatusOk;
 }
 
+std::uint8_t App::enter_isp_host() noexcept
+{
+    return attach(true);
+}
+
+std::uint8_t App::begin_isp(std::uint32_t image_size, isp::Isp::Info& info) noexcept
+{
+    std::uint8_t status = enter_isp_host();
+    if (status != kStatusOk)
+    {
+        return status;
+    }
+
+    if (!m_isp.identify(info))
+    {
+        return kStatusIsp;
+    }
+
+    if (m_isp.unlock_required())
+    {
+        if (!m_isp.unlock())
+        {
+            return kStatusIsp;
+        }
+
+        status = enter_isp_host();
+        if (status != kStatusOk)
+        {
+            return status;
+        }
+
+        if (!m_isp.identify(info) || m_isp.unlock_required())
+        {
+            return kStatusIsp;
+        }
+    }
+
+    return m_isp.begin(image_size, info) ? kStatusOk : kStatusIsp;
+}
+
+void App::write_vid_pid(std::uint8_t* dst) const noexcept
+{
+    const auto& info = m_host.info();
+    dst[0]           = static_cast<std::uint8_t>(info.vid & 0xFFu);
+    dst[1]           = static_cast<std::uint8_t>(info.vid >> 8);
+    dst[2]           = static_cast<std::uint8_t>(info.pid & 0xFFu);
+    dst[3]           = static_cast<std::uint8_t>(info.pid >> 8);
+}
+
 std::uint8_t App::enter_master() noexcept
 {
-    m_isp.abort();
-    stop_bridge();
-
-    m_host.power_cycle_master();
-
-    usbhost::DeviceInfo info;
-    const auto          result = m_host.enumerate(info, 1200);
-    if (result != usbhost::Result::ok)
+    const std::uint8_t status = attach(false);
+    if (status != kStatusOk)
     {
-        return (result == usbhost::Result::disconnected || result == usbhost::Result::timeout) ? kStatusNoTarget
-                                                                                               : kStatusUsb;
+        return status;
     }
 
-    if (m_host.is_isp_device())
-    {
-        return kStatusNoTarget;
-    }
-
+    const auto& info = m_host.info();
     if (info.bulk_in == 0 || info.bulk_out == 0)
     {
         return kStatusUnsupported;
@@ -493,8 +461,7 @@ std::uint8_t App::enter_master() noexcept
 
 std::uint8_t App::enter_slave(std::uint32_t baud) noexcept
 {
-    m_isp.abort();
-    stop_bridge();
+    reset_session();
 
     // Power the target with the data lines floating so its bootloader sees D+
     // low and starts the application. The application's own pull-ups then make

@@ -8,7 +8,6 @@ namespace ch582::serial
 {
 
 inline constexpr std::uint8_t kStopBits1   = 0;
-inline constexpr std::uint8_t kStopBits1_5 = 1;
 inline constexpr std::uint8_t kStopBits2   = 2;
 
 inline constexpr std::uint8_t kParityNone  = 0;
