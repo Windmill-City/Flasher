@@ -46,8 +46,8 @@ void Host::vbus(bool on) noexcept
 void Host::release_pins(bool pull_down) noexcept
 {
     usb2reg::int_en()    = 0;
-    usb2reg::host_ctrl() = 0;
     usb2reg::ctrl()      = 0;
+    usb2reg::host_ctrl() = usb2reg::kUhPdDis;
 
     sysreg::pin_analog_ie() &= static_cast<std::uint16_t>(~(sysreg::kPinUsb2Ie | sysreg::kPinUsb2DpPu));
     sysreg::pin_alternate() &= static_cast<std::uint16_t>(~sysreg::kPinUart1);
