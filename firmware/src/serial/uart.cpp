@@ -94,7 +94,7 @@ void Uart::init(std::uint32_t baud) noexcept
     set_baud(baud);
 
     uart1::fcr() =
-        static_cast<std::uint8_t>((2u << 6) | uart1::kFcrFifoEnable | uart1::kFcrRxClear | uart1::kFcrTxClear);
+        static_cast<std::uint8_t>((1u << 6) | uart1::kFcrFifoEnable | uart1::kFcrRxClear | uart1::kFcrTxClear);
     uart1::lcr() = uart1::kLcrWordSizeMask;
     uart1::ier() = uart1::kIerTxdEnable | uart1::kIerRecvReady;
     uart1::mcr() |= uart1::kMcrIrqOutput;

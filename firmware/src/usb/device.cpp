@@ -435,18 +435,29 @@ void Device::poll()
         return;
     }
 
+    if ((usbreg::ep2_ctrl() & usbreg::kMaskUepTRes) != usbreg::kUepTResNak)
+    {
+        return;
+    }
+
+    if (m_tx == nullptr)
+    {
+        return;
+    }
+
+    std::uint8_t length = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize - 1, m_tx->size()));
+    if (length == 0)
+    {
+        return;
+    }
+
+    length = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
+
+    CriticalSection guard;
     if ((usbreg::ep2_ctrl() & usbreg::kMaskUepTRes) == usbreg::kUepTResNak)
     {
-        if (m_tx != nullptr)
-        {
-            std::uint8_t length = static_cast<std::uint8_t>(std::min<std::size_t>(kPacketSize, m_tx->size()));
-            if (length != 0)
-            {
-                length              = static_cast<std::uint8_t>(m_tx->read(&m_ep2_buffer[kPacketSize], length));
-                usbreg::ep2_t_len() = length;
-                usbreg::ep2_ctrl()  = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResAck;
-            }
-        }
+        usbreg::ep2_t_len() = length;
+        usbreg::ep2_ctrl()  = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepTRes) | usbreg::kUepTResAck;
     }
 }
 
@@ -458,6 +469,8 @@ std::size_t Device::read_host(void* dst, std::size_t max_length) noexcept
     }
 
     const std::size_t length = m_rx_buffer.read(dst, max_length);
+
+    CriticalSection guard;
     if (m_rx_buffer.size() < (kUsbBufferSize - kPacketSize))
     {
         usbreg::ep2_ctrl() = (usbreg::ep2_ctrl() & ~usbreg::kMaskUepRRes) | usbreg::kUepRResAck;

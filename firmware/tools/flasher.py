@@ -102,7 +102,7 @@ def find_port(explicit: str | None) -> str:
 
 class Flasher:
     def __init__(self, port: str):
-        self.ser = serial.Serial(port, 115200, timeout=0.2, write_timeout=5)
+        self.ser = serial.Serial(port, 115200, timeout=0, write_timeout=5)
         self.ser.reset_input_buffer()
         self.ser.reset_output_buffer()
 
@@ -144,7 +144,11 @@ class Flasher:
         deadline = time.monotonic() + timeout
         window = bytearray()
         while time.monotonic() < deadline:
-            window += self.ser.read(64)
+            chunk = self.ser.read(64)
+            if not chunk:
+                time.sleep(0.001)
+                continue
+            window += chunk
             start = window.find(b"\x55\xAA")
             if start < 0:
                 if len(window) > 4:
@@ -358,6 +362,8 @@ def monitor(ser: serial.Serial) -> None:
             if data:
                 sys.stdout.buffer.write(data)
                 sys.stdout.buffer.flush()
+            else:
+                time.sleep(0.001)
 
     thread = threading.Thread(target=reader, daemon=True)
     thread.start()

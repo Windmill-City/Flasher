@@ -102,7 +102,7 @@ class Host
 
     std::uint8_t m_ep0_size = 8;
     std::uint8_t m_rx_ctrl  = usb2reg::kUepAutoTog;
-    std::uint8_t m_tx_ctrl  = usb2reg::kUepAutoTog;
+    std::uint8_t m_tx_ctrl  = 0;
 };
 
 } // namespace ch582::usbhost

@@ -834,6 +834,7 @@ inline constexpr std::uint8_t kUepAutoTog      = 0x10;
 inline constexpr std::uint8_t kPidSetup        = 0x0D;
 inline constexpr std::uint8_t kPidIn           = 0x09;
 inline constexpr std::uint8_t kPidOut          = 0x01;
+inline constexpr std::uint8_t kPidAck          = 0x02;
 inline constexpr std::uint8_t kPidNak          = 0x0A;
 inline constexpr std::uint8_t kPidStall        = 0x0E;
 inline constexpr std::uint8_t kPidData0        = 0x03;

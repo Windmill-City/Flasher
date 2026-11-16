@@ -9,6 +9,7 @@ namespace ch582::usbhost
 namespace
 {
 
+using usb2reg::kPidAck;
 using usb2reg::kPidData0;
 using usb2reg::kPidData1;
 using usb2reg::kPidIn;
@@ -111,14 +112,12 @@ void Host::init() noexcept
 
     usb2reg::host_setup() = usb2reg::kUhSofEn;
     usb2reg::int_fg()     = 0xFF;
-    // Enable the status flags but do not enable the PFIC USB2 vector; the
-    // driver polls INT_FG synchronously.
     usb2reg::int_en()     = usb2reg::kUieTransfer | usb2reg::kUieDetect;
-    usb2reg::host_ctrl()  = 0; // internal D+/D- pulldowns enabled
+    usb2reg::host_ctrl()  = 0;
 
     m_ep0_size            = 8;
     m_rx_ctrl             = usb2reg::kUepAutoTog;
-    m_tx_ctrl             = usb2reg::kUepAutoTog;
+    m_tx_ctrl             = 0;
     m_info                = DeviceInfo{};
 }
 
@@ -233,7 +232,21 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
             if (systick::expired(deadline))
             {
                 usb2reg::host_ep_pid() = 0;
-                return Xfer::timeout;
+
+                for (std::uint32_t grace = 0; grace < 20; ++grace)
+                {
+                    if ((usb2reg::int_fg() & usb2reg::kUifTransfer) != 0)
+                    {
+                        break;
+                    }
+                    delay_us(10);
+                }
+                if ((usb2reg::int_fg() & usb2reg::kUifTransfer) == 0)
+                {
+                    return Xfer::timeout;
+                }
+
+                break;
             }
         }
 
@@ -270,22 +283,33 @@ Xfer Host::transact(std::uint8_t endp_pid, std::uint8_t tog, std::uint32_t timeo
         }
 
         const std::uint8_t token = static_cast<std::uint8_t>(endp_pid >> 4);
-        if (token == kPidIn && (response == kPidData0 || response == kPidData1))
+        if (token == kPidIn)
         {
-            // Data toggle mismatch: discard and retry.
-            if (systick::expired(deadline))
+            if (response == kPidData0 || response == kPidData1)
             {
-                return Xfer::timeout;
+                // Data toggle mismatch: discard and retry.
+                if (systick::expired(deadline))
+                {
+                    return Xfer::timeout;
+                }
+                delay_us(20);
+                continue;
             }
-            delay_us(20);
-            continue;
+            if (response != 0)
+            {
+                return Xfer::error;
+            }
         }
-
-        if (response != 0)
+        else
         {
-            // ACK without a toggle match on SETUP/OUT must not be retried:
-            // resending the packet would duplicate the write.
-            return Xfer::error;
+            if (response == kPidAck)
+            {
+                return Xfer::ok;
+            }
+            if (response != 0)
+            {
+                return Xfer::error;
+            }
         }
 
         if (systick::expired(deadline))
@@ -437,7 +461,7 @@ Result Host::set_configuration(std::uint8_t value) noexcept
     if (result == Result::ok)
     {
         m_rx_ctrl               = usb2reg::kUepAutoTog;
-        m_tx_ctrl               = usb2reg::kUepAutoTog;
+        m_tx_ctrl               = 0;
         usb2reg::host_rx_ctrl() = m_rx_ctrl;
         usb2reg::host_tx_ctrl() = m_tx_ctrl;
     }
@@ -632,7 +656,8 @@ Result Host::bulk_out(std::uint8_t ep, const void* data, std::uint8_t length, st
     const Xfer x           = transact(static_cast<std::uint8_t>((kPidOut << 4) | (ep & 0x0Fu)), m_tx_ctrl, timeout_us);
     if (x == Xfer::ok)
     {
-        m_tx_ctrl               = usb2reg::host_tx_ctrl();
+        m_tx_ctrl               = static_cast<std::uint8_t>(m_tx_ctrl ^ usb2reg::kUepTTog);
+        usb2reg::host_tx_ctrl() = m_tx_ctrl;
         usb2reg::host_rx_ctrl() = m_rx_ctrl;
         return Result::ok;
     }
